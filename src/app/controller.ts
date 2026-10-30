@@ -3,6 +3,7 @@
  * becomes core Actions here; applyAction is the only thing that changes the state.
  */
 import { Application } from 'pixi.js';
+import { shipFor } from '../core/cargo';
 import { bombardRange, hasBombard, previewBombard } from '../core/combat/bombard';
 import { cannotAttack, previewAttack } from '../core/combat/resolve';
 import { coordsEqual, distance, isAdjacent } from '../core/grid';
@@ -49,6 +50,8 @@ export class GameController {
     this.unitPanel = new UnitPanel({
       select: (id) => this.selectUnit(id),
       fortify: () => this.fortify(),
+      board: () => this.board(),
+      goAshore: () => this.goAshore(),
       next: () => this.nextUnit(),
       cancelOrders: () =>
         this.unitId !== null && this.dispatch({ type: 'setOrders', unitId: this.unitId, orders: null }),
@@ -196,6 +199,21 @@ export class GameController {
     if (this.unitId !== null && this.dispatch({ type: 'fortify', unitId: this.unitId })) this.nextUnit();
   }
 
+  /** Put the selected unit aboard a friendly ship with room in the same city. */
+  board(): void {
+    const unit = this.selectedUnit;
+    const ship = unit && shipFor(this.state, unit, unit.pos);
+    if (!unit || !ship) return;
+    if (this.dispatch({ type: 'board', unitId: unit.id, carrierId: ship.id })) this.selectUnit(unit.id);
+  }
+
+  /** Take the selected unit off its ship in port. */
+  goAshore(): void {
+    const unit = this.selectedUnit;
+    if (!unit) return;
+    if (this.dispatch({ type: 'move', unitId: unit.id, to: unit.pos })) this.selectUnit(unit.id);
+  }
+
   endTurn(): void {
     if (!this.dispatch({ type: 'endTurn' })) return;
     // Until the AI exists (step 11), AI players pass their turn straight away.
@@ -236,6 +254,10 @@ export class GameController {
       case 'f':
       case 'F':
         this.fortify();
+        return true;
+      case 'b':
+      case 'B':
+        this.board();
         return true;
       case 'Enter':
         this.endTurn();

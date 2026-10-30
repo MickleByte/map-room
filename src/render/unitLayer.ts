@@ -1,12 +1,13 @@
 /**
  * Units on the map. Each tile shows one unit token (the selected unit, else the
- * strongest defender), with HP, veteran level, fortified status and stack size.
+ * strongest defender), with HP, veteran level, fortified status, stack size and,
+ * on the viewer's own ships, how many units are aboard.
  * Shapes go into one GraphicsContext shared by every wrap copy.
  */
 import { Container, GraphicsContext, Text } from 'pixi.js';
 import { tileIndex } from '../core/grid';
 import { maxHp } from '../core/ruleset';
-import { cityAt, currentPlayer, typeOf } from '../core/state';
+import { cargoOf, cityAt, currentPlayer, typeOf } from '../core/state';
 import type { GameState, Unit, UnitId } from '../core/types';
 import type { Vision } from '../core/visibility';
 import { tileCentre } from './iso';
@@ -49,7 +50,7 @@ export function topUnit(state: GameState, units: Unit[], selected: UnitId | null
 export function drawUnits(vision: Vision, selected: UnitId | null): UnitDrawing {
   const { state } = vision;
   const shapes = new GraphicsContext();
-  const badges: { x: number; y: number; count: number }[] = [];
+  const badges: { x: number; y: number; count: number; cargo?: boolean }[] = [];
   const mover = currentPlayer(state).id;
 
   for (const units of stacks(vision).values()) {
@@ -94,9 +95,21 @@ export function drawUnits(vision: Vision, selected: UnitId | null): UnitDrawing 
     }
 
     if (units.length > 1) badges.push({ x: bx + TOKEN_W + 1, y: by - 1, count: units.length });
+
+    // Units aboard, shown only on the viewer's own ships.
+    const aboard = cargoOf(state, unit.id).length;
+    if (aboard && (vision.player === null || unit.owner === vision.player))
+      badges.push({ x: bx + TOKEN_W + 1, y: by + TOKEN_H, count: aboard, cargo: true });
   }
 
-  for (const b of badges) shapes.circle(b.x, b.y, 6).fill(0x111111).stroke({ width: 1, color: 0xdddddd });
+  for (const b of badges) {
+    if (b.cargo)
+      shapes
+        .roundRect(b.x - 5.5, b.y - 5, 11, 10, 2)
+        .fill(0x7a5a1e)
+        .stroke({ width: 1, color: 0xffe08a });
+    else shapes.circle(b.x, b.y, 6).fill(0x111111).stroke({ width: 1, color: 0xdddddd });
+  }
 
   const labels = () => {
     const layer = new Container();

@@ -1,8 +1,9 @@
 /** Unit state changes shared by several actions. All functions mutate a draft state. */
 import { findPath, stepUses } from './movement';
-import { normalize } from './grid';
+import { shipFor } from './cargo';
+import { normalize, tileAt } from './grid';
 import { captureCity } from './cities';
-import { cargoOf, cityAt } from './state';
+import { cargoOf, cityAt, typeOf } from './state';
 import type { Coord, GameEvent, GameState, Unit } from './types';
 import { lookAround } from './visibility';
 
@@ -20,6 +21,11 @@ export function placeUnit(state: GameState, unit: Unit, to: Coord, events: GameE
   // Copy coordinates: events outlive the draft, so they must not hold draft objects.
   const from = { ...unit.pos };
   const dest = { ...normalize(state.map, to)! };
+  if (typeOf(state, unit).domain === 'land') {
+    // Stepping onto a sea tile boards a ship there; stepping onto land goes ashore.
+    const atSea = state.ruleset.terrain[tileAt(state.map, dest).terrain]!.domain === 'sea';
+    unit.carriedBy = atSea ? shipFor(state, unit, dest)!.id : null;
+  }
   unit.pos = { ...dest };
   unit.fortified = false;
   unit.actedThisTurn = true;

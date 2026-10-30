@@ -81,4 +81,21 @@ describe('describeEvents', () => {
       'Blue Field Battery was destroyed.',
     ]);
   });
+
+  it('says which units went down with a sunk ship', () => {
+    const sea = makeState({
+      terrain: ['ccoo'],
+      units: [{ type: 'transport', owner: 'blue', x: 2, y: 0, cargo: [{ type: 'armour' }] }],
+    });
+    const ship = unitOf(sea, 'transport').id;
+    const cargo = unitOf(sea, 'armour').id;
+    const events: GameEvent[] = [
+      { type: 'unitDestroyed', unitId: cargo },
+      { type: 'unitDestroyed', unitId: ship },
+    ];
+    expect(describeEvents(sea, events)).toEqual([
+      'Blue Battle Tank went down with Blue Troopship.',
+      'Blue Troopship was destroyed.',
+    ]);
+  });
 });

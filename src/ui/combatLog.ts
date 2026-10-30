@@ -48,9 +48,16 @@ export function describeEvents(before: GameState, events: GameEvent[]): string[]
       case 'unitCaptured':
         lines.push(`${playerName(e.newOwner)} captured ${unitName(e.unitId)}.`);
         break;
-      case 'unitDestroyed':
-        if (!fought.has(e.unitId)) lines.push(`${unitName(e.unitId)} was destroyed.`);
+      case 'unitDestroyed': {
+        if (fought.has(e.unitId)) break;
+        const ship = before.units[e.unitId]?.carriedBy;
+        lines.push(
+          ship != null
+            ? `${unitName(e.unitId)} went down with ${unitName(ship)}.`
+            : `${unitName(e.unitId)} was destroyed.`,
+        );
         break;
+      }
       case 'cityCaptured':
         lines.push(`${playerName(e.newOwner)} captured ${before.cities[e.cityId]?.name ?? 'a city'}.`);
         break;

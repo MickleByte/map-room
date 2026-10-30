@@ -55,6 +55,10 @@ export class Board {
     return this.cities.get(c.y * this.state.map.width + c.x);
   }
 
+  hasOwn(c: Coord, player: string): boolean {
+    return !!this.owners.get(c.y * this.state.map.width + c.x)?.has(player);
+  }
+
   hasEnemy(c: Coord, player: string): boolean {
     const set = this.owners.get(c.y * this.state.map.width + c.x);
     return !!set && [...set].some((o) => o !== player);

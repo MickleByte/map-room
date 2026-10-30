@@ -479,6 +479,35 @@
       "owner": "blue",
       "x": 7,
       "y": 19
+    },
+    {
+      "type": "transport",
+      "owner": "red",
+      "x": 6,
+      "y": 36,
+      "cargo": [
+        {
+          "type": "infantry"
+        }
+      ]
+    },
+    {
+      "type": "transport",
+      "owner": "red",
+      "x": 5,
+      "y": 34
+    },
+    {
+      "type": "destroyer",
+      "owner": "red",
+      "x": 4,
+      "y": 36
+    },
+    {
+      "type": "destroyer",
+      "owner": "blue",
+      "x": 3,
+      "y": 36
     }
   ]
 }

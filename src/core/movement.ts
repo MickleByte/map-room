@@ -2,6 +2,7 @@
  * Movement rules: which tiles a unit may enter, what each step costs, and
  * multi-turn pathfinding. Costs are in thirds of a movement point.
  */
+import { cannotBoardAt } from './cargo';
 import { neighbours, tileAt, tileIndex } from './grid';
 import { THIRDS_PER_MP } from './ruleset';
 import { Board, typeOf } from './state';
@@ -16,7 +17,11 @@ export function cannotEnter(
 ): string | null {
   const why = cannotOccupy(state, unit, to, board);
   if (why) return why;
-  return board.hasEnemy(to, unit.owner) ? 'An enemy is there; attack instead' : null;
+  if (!board.hasEnemy(to, unit.owner)) return null;
+  // No amphibious assault: cargo can't fight its way ashore.
+  return unit.carriedBy !== null
+    ? 'Units cannot attack from aboard a ship'
+    : 'An enemy is there; attack instead';
 }
 
 /**
@@ -35,7 +40,14 @@ export function cannotOccupy(
   const city = board.cityAt(to);
 
   if (def.domain === 'air') return 'Aircraft fly missions or rebase; they do not move';
-  if (def.domain === 'land' && terrain.domain !== 'land') return 'Land units cannot enter the sea';
+  if (def.domain === 'land' && terrain.domain !== 'land') {
+    // Only by boarding a friendly transport. Enemy ships are never boarded, so this
+    // also keeps land units from attacking ships at sea (ADR-0003).
+    const noShip = 'Land units cannot enter the sea';
+    if (!board.hasOwn(to, unit.owner)) return noShip;
+    const why = cannotBoardAt(state, unit, to, noShip);
+    if (why) return why;
+  }
   if (def.domain === 'sea' && terrain.domain !== 'sea' && !(city && city.owner === unit.owner))
     return 'Ships can only enter the sea or a friendly city';
   if (city && city.owner !== unit.owner && !def.canCaptureCities) return 'This unit cannot capture cities';

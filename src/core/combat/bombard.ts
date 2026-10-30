@@ -41,10 +41,10 @@ export function bombardTarget(state: GameState, unit: Unit, target: Coord): Defe
   return strongest(state, enemies, unit.pos);
 }
 
-/** The tiles a unit's bombard reaches, its own excluded; none if it has no bombard. */
+/** The tiles a unit's bombard reaches, its own excluded; none if it has no bombard or is aboard a ship. */
 export function bombardRange(state: GameState, unit: Unit): Coord[] {
   const def = typeOf(state, unit);
-  if (!hasBombard(def)) return [];
+  if (!hasBombard(def) || unit.carriedBy !== null) return [];
   return tilesWithin(state.map, unit.pos, def.bombardRange).filter((c) => !coordsEqual(c, unit.pos));
 }
 

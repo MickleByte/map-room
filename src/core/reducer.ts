@@ -6,9 +6,10 @@
 import { produce } from 'immer';
 import { cannotBombard, resolveBombard } from './combat/bombard';
 import { cannotAttack, resolveAttack } from './combat/resolve';
-import { isAdjacent, normalize } from './grid';
+import { cannotCarry } from './cargo';
+import { coordsEqual, isAdjacent, normalize } from './grid';
 import { cannotEnter, findPath } from './movement';
-import { currentPlayer, typeOf } from './state';
+import { cityAt, currentPlayer, typeOf } from './state';
 import { endTurn } from './turn';
 import type { Action, ApplyResult, GameEvent, GameState, Unit } from './types';
 import { advanceOrders, moveUnit } from './units';
@@ -33,7 +34,14 @@ const handlers: Handlers = {
     if (typeof unit === 'string') return unit;
     const dest = normalize(state.map, to);
     if (!dest) return 'That tile is off the map';
-    if (unit.carriedBy !== null) return 'Disembarking is not available yet';
+    if (unit.carriedBy !== null && coordsEqual(unit.pos, dest)) {
+      // Going ashore in port, without moving.
+      if (typeOf(state, unit).domain !== 'land' || !cityAt(state, dest))
+        return 'This unit is already aboard; it can go ashore in a city or onto adjacent land';
+      unit.carriedBy = null;
+      unit.orders = null;
+      return;
+    }
     if (!isAdjacent(state.map, unit.pos, dest)) return 'Units move one tile at a time';
     if (unit.movesLeft <= 0) return 'This unit has no movement left';
     const why = cannotEnter(state, unit, dest);
@@ -87,7 +95,21 @@ const handlers: Handlers = {
     endTurn(state, events);
   },
 
-  board: notYet('Boarding'),
+  board(state, { unitId, carrierId }) {
+    const unit = ownUnit(state, unitId);
+    if (typeof unit === 'string') return unit;
+    const ship = state.units[carrierId];
+    if (!ship) return `No unit with id ${carrierId}`;
+    if (!coordsEqual(unit.pos, ship.pos)) return 'The unit and the ship must be on the same tile';
+    if (!cityAt(state, unit.pos)) return 'Units board in a city; at sea, move onto the ship';
+    if (unit.carriedBy !== null) return 'This unit is already aboard a ship';
+    const why = cannotCarry(state, ship, unit);
+    if (why) return why;
+    unit.carriedBy = ship.id;
+    unit.fortified = false;
+    unit.orders = null;
+    if (typeOf(state, unit).domain === 'air') unit.base = { kind: 'carrier', id: ship.id };
+  },
   airMission: notYet('Air missions'),
   airSuperiority: notYet('Air superiority'),
   rebase: notYet('Rebasing'),
