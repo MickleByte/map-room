@@ -1,12 +1,17 @@
-import { Application } from 'pixi.js';
+import { GameController } from './app/controller';
+import { loadScenario } from './core/scenario';
+import sandbox from './data/scenarios/sandbox.json';
 
 async function start(): Promise<void> {
   const stage = document.getElementById('stage');
-  if (!stage) throw new Error('#stage element missing');
+  const ui = document.getElementById('ui');
+  if (!stage || !ui) throw new Error('#stage or #ui element missing');
 
-  const app = new Application();
-  await app.init({ resizeTo: window, background: '#141b24', antialias: true });
-  stage.appendChild(app.canvas);
+  const state = loadScenario(sandbox);
+  const controller = await GameController.start(stage, ui, state);
+
+  // Test hook for Playwright: lets e2e tests drive the camera and selection directly.
+  if (import.meta.env.DEV) Object.assign(window, { __mapRoom: controller });
 }
 
 void start();
