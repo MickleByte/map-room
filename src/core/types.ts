@@ -2,6 +2,7 @@
  * Core game data. Everything in GameState is plain JSON-serialisable data so that
  * saves, replays and the AI worker can pass it around freely.
  */
+import type { DefenceBreakdown } from './combat/modifiers';
 import type { RngState } from './rng';
 import type { Ruleset, VeteranLevel } from './ruleset';
 
@@ -146,7 +147,18 @@ export type CombatRound = 'A' | 'D';
 
 export type GameEvent =
   | { type: 'unitMoved'; unitId: UnitId; from: Coord; to: Coord }
-  | { type: 'combat'; attacker: UnitId; defender: UnitId; rounds: CombatRound[]; winner: UnitId }
+  | {
+      type: 'combat';
+      attacker: UnitId;
+      defender: UnitId;
+      /** Who won each round, in order. */
+      rounds: CombatRound[];
+      winner: UnitId;
+      /** The attacker's strength. */
+      attack: number;
+      /** The defender's strength, itemised. */
+      defence: DefenceBreakdown;
+    }
   | { type: 'bombarded'; unitId: UnitId; target: UnitId; hits: number; misses: number }
   | { type: 'intercepted'; fighter: UnitId; bomber: UnitId; rounds: CombatRound[]; winner: UnitId }
   | { type: 'unitDestroyed'; unitId: UnitId }

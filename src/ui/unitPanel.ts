@@ -50,7 +50,10 @@ export class UnitPanel {
       buttons.append(el('button', { textContent: 'Next unit (N)', onclick: () => this.actions.next() }));
       this.element.append(
         buttons,
-        el('p', { className: 'hint', textContent: 'Right-click a tile to move there.' }),
+        el('p', {
+          className: 'hint',
+          textContent: 'Right-click a tile to move there, or an adjacent enemy to attack.',
+        }),
       );
     }
   }

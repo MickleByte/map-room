@@ -14,19 +14,31 @@ export function cannotEnter(
   to: Coord,
   board: Board = new Board(state),
 ): string | null {
+  const why = cannotOccupy(state, unit, to, board);
+  if (why) return why;
+  return board.hasEnemy(to, unit.owner) ? 'An enemy is there; attack instead' : null;
+}
+
+/**
+ * Why a unit could not stand on a tile once any enemies there were gone, or null if
+ * it could. This is also the attack rule: a unit may only attack tiles it could
+ * occupy (ADR-0003).
+ */
+export function cannotOccupy(
+  state: GameState,
+  unit: Unit,
+  to: Coord,
+  board: Board = new Board(state),
+): string | null {
   const def = typeOf(state, unit);
   const terrain = state.ruleset.terrain[tileAt(state.map, to).terrain]!;
   const city = board.cityAt(to);
 
   if (def.domain === 'air') return 'Aircraft fly missions or rebase; they do not move';
-  if (board.hasEnemy(to, unit.owner)) return 'An enemy is there; attack instead';
   if (def.domain === 'land' && terrain.domain !== 'land') return 'Land units cannot enter the sea';
   if (def.domain === 'sea' && terrain.domain !== 'sea' && !(city && city.owner === unit.owner))
     return 'Ships can only enter the sea or a friendly city';
-  if (city && city.owner !== unit.owner) {
-    if (!def.canCaptureCities) return 'This unit cannot capture cities';
-    return 'Capturing cities is not available yet';
-  }
+  if (city && city.owner !== unit.owner && !def.canCaptureCities) return 'This unit cannot capture cities';
   return null;
 }
 

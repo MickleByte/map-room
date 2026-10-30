@@ -10,6 +10,18 @@ export function formatMoves(thirds: number): string {
   return `${whole}${part}`;
 }
 
+/** A combat strength with at most two decimals: 17.5, 12, 11.25. */
+export function formatStrength(n: number): string {
+  return String(Math.round(n * 100) / 100);
+}
+
+/** A probability as a whole percentage, never rounding a possible result to 0% or 100%. */
+export function formatPercent(p: number): string {
+  if (p > 0 && p < 0.01) return '<1%';
+  if (p < 1 && p > 0.99) return '>99%';
+  return `${Math.round(p * 100)}%`;
+}
+
 export function capitalise(s: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }

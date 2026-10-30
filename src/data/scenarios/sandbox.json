@@ -466,6 +466,19 @@
           "type": "antiTank"
         }
       ]
+    },
+    {
+      "type": "infantry",
+      "owner": "blue",
+      "x": 7,
+      "y": 19,
+      "fortified": true
+    },
+    {
+      "type": "artillery",
+      "owner": "blue",
+      "x": 7,
+      "y": 19
     }
   ]
 }

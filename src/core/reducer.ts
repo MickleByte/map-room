@@ -4,6 +4,7 @@
  * result (ADR-0004).
  */
 import { produce } from 'immer';
+import { cannotAttack, resolveAttack } from './combat/resolve';
 import { isAdjacent, normalize } from './grid';
 import { cannotEnter, findPath } from './movement';
 import { currentPlayer, typeOf } from './state';
@@ -65,11 +66,18 @@ const handlers: Handlers = {
     advanceOrders(state, unit, events);
   },
 
+  attack(state, { unitId, target }, events) {
+    const unit = ownUnit(state, unitId);
+    if (typeof unit === 'string') return unit;
+    const why = cannotAttack(state, unit, target);
+    if (why) return why;
+    resolveAttack(state, unit, normalize(state.map, target)!, events);
+  },
+
   endTurn(state, _action, events) {
     endTurn(state, events);
   },
 
-  attack: notYet('Attacking'),
   bombard: notYet('Bombardment'),
   board: notYet('Boarding'),
   airMission: notYet('Air missions'),

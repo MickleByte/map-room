@@ -3,6 +3,7 @@
  * becomes core Actions here; applyAction is the only thing that changes the state.
  */
 import { Application } from 'pixi.js';
+import { previewAttack } from '../core/combat/resolve';
 import { coordsEqual, isAdjacent } from '../core/grid';
 import { cannotEnter, findPath } from '../core/movement';
 import { applyAction } from '../core/reducer';
@@ -13,7 +14,9 @@ import { Camera } from '../render/camera';
 import { tileAtPoint, tileCentre, type Point } from '../render/iso';
 import { MapView } from '../render/mapView';
 import { Minimap } from '../render/minimap';
+import { CombatLog, describeEvents } from '../ui/combatLog';
 import { el } from '../ui/dom';
+import { OddsTooltip } from '../ui/oddsTooltip';
 import { TilePanel } from '../ui/tilePanel';
 import { TopBar } from '../ui/topBar';
 import { UnitPanel } from '../ui/unitPanel';
@@ -27,6 +30,8 @@ export class GameController {
   private readonly tilePanel = new TilePanel();
   private readonly topBar: TopBar;
   private readonly pathTip = el('div', { className: 'path-tip', hidden: true });
+  private readonly oddsTip = new OddsTooltip();
+  private readonly combatLog = new CombatLog();
   private readonly minimap: Minimap;
   /** What the human player can see of the current state. */
   vision: Vision;
@@ -53,6 +58,8 @@ export class GameController {
       this.unitPanel.element,
       this.tilePanel.element,
       this.pathTip,
+      this.oddsTip.element,
+      this.combatLog.element,
       this.minimap.element,
     );
   }
@@ -146,18 +153,27 @@ export class GameController {
 
   // ---- orders ----
 
-  /** Right-click: step to an adjacent tile, or set a go-to order for anywhere further. */
+  /**
+   * Right-click: attack an adjacent enemy, step to an adjacent tile, or set a go-to
+   * order for anywhere further.
+   */
   orderSelectedTo(target: Coord): void {
     const unit = this.selectedUnit;
     if (!unit || unit.owner !== currentPlayer(this.state).id) return;
     if (coordsEqual(unit.pos, target)) return;
-    const action: Action =
-      isAdjacent(this.state.map, unit.pos, target) &&
-      unit.movesLeft > 0 &&
-      !cannotEnter(this.state, unit, target)
-        ? { type: 'move', unitId: unit.id, to: target }
-        : { type: 'setOrders', unitId: unit.id, orders: { kind: 'goto', target } };
-    if (this.dispatch(action)) this.selectUnit(unit.id);
+    const adjacent = isAdjacent(this.state.map, unit.pos, target);
+    let action: Action;
+    if (adjacent && this.enemyVisibleAt(target)) action = { type: 'attack', unitId: unit.id, target };
+    else if (adjacent && unit.movesLeft > 0 && !cannotEnter(this.state, unit, target))
+      action = { type: 'move', unitId: unit.id, to: target };
+    else action = { type: 'setOrders', unitId: unit.id, orders: { kind: 'goto', target } };
+    if (this.dispatch(action) && this.state.units[unit.id]) this.selectUnit(unit.id);
+  }
+
+  /** Whether the human can see enemy units on a tile; only those can be targeted. */
+  private enemyVisibleAt(c: Coord): boolean {
+    const me = currentPlayer(this.state).id;
+    return this.vision.unitsAt(c).some((u) => u.owner !== me);
   }
 
   fortify(): void {
@@ -180,6 +196,7 @@ export class GameController {
       this.topBar.message(result.reason);
       return false;
     }
+    this.combatLog.add(describeEvents(this.state, result.events));
     this.state = result.state;
     if (this.unitId !== null && !this.state.units[this.unitId]) this.unitId = null;
     this.refresh();
@@ -242,9 +259,18 @@ export class GameController {
     const h = this.hovered;
     const canPlan =
       unit && h && unit.owner === currentPlayer(this.state).id && typeOf(this.state, unit).movement > 0;
+    this.oddsTip.hide();
     if (!canPlan || coordsEqual(unit.pos, h.tile)) {
       this.view.showPath(unit?.pos ?? { x: 0, y: 0 }, null, null);
       this.pathTip.hidden = true;
+      return;
+    }
+    if (isAdjacent(this.state.map, unit.pos, h.tile) && this.enemyVisibleAt(h.tile)) {
+      this.view.showPath(unit.pos, null, null);
+      this.pathTip.hidden = true;
+      const preview = previewAttack(this.state, unit, h.tile);
+      if (typeof preview === 'string') this.oddsTip.showReason(preview, h.screen);
+      else this.oddsTip.show(this.state, unit, preview, h.screen);
       return;
     }
     const path = findPath(this.state, unit, h.tile);

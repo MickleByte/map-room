@@ -1,0 +1,68 @@
+/** The combat log: a running list of fights, promotions and captures. */
+import { typeOf } from '../core/state';
+import type { GameEvent, GameState, UnitId } from '../core/types';
+import { el } from './dom';
+import { capitalise, formatStrength } from './format';
+
+const MAX_ENTRIES = 30;
+
+/**
+ * Plain-text lines for the combat-related events of one action. Units are looked up in
+ * the state from before the action, since some of them no longer exist after it.
+ */
+export function describeEvents(before: GameState, events: GameEvent[]): string[] {
+  const playerName = (id: string) => before.players.find((p) => p.id === id)?.name ?? id;
+  const unitName = (id: UnitId) => {
+    const u = before.units[id];
+    return u ? `${playerName(u.owner)} ${typeOf(before, u).name}` : `Unit ${id}`;
+  };
+  const fought = new Set<UnitId>();
+  const lines: string[] = [];
+
+  for (const e of events) {
+    switch (e.type) {
+      case 'combat': {
+        fought.add(e.attacker).add(e.defender);
+        const won = e.rounds.filter((r) => r === 'A').length;
+        const lost = e.rounds.length - won;
+        const verb = e.winner === e.attacker ? 'defeated' : 'was destroyed attacking';
+        lines.push(
+          `${unitName(e.attacker)} (${formatStrength(e.attack)}) ${verb} ${unitName(e.defender)} ` +
+            `(${formatStrength(e.defence.strength)}), winning ${won} round${won === 1 ? '' : 's'} to ${lost}.`,
+        );
+        break;
+      }
+      case 'unitPromoted':
+        lines.push(`${unitName(e.unitId)} was promoted to ${capitalise(e.to)}.`);
+        break;
+      case 'unitCaptured':
+        lines.push(`${playerName(e.newOwner)} captured ${unitName(e.unitId)}.`);
+        break;
+      case 'unitDestroyed':
+        if (!fought.has(e.unitId)) lines.push(`${unitName(e.unitId)} was destroyed.`);
+        break;
+      case 'cityCaptured':
+        lines.push(`${playerName(e.newOwner)} captured ${before.cities[e.cityId]?.name ?? 'a city'}.`);
+        break;
+    }
+  }
+  return lines;
+}
+
+export class CombatLog {
+  readonly element = el('section', { className: 'panel combat-log', hidden: true });
+  private readonly list = el('ol');
+
+  constructor() {
+    this.element.append(el('h2', { textContent: 'Combat log' }), this.list);
+  }
+
+  add(lines: string[]): void {
+    if (!lines.length) return;
+    for (const old of this.list.querySelectorAll('.latest')) old.classList.remove('latest');
+    // Newest first, keeping the lines of one action in order.
+    this.list.prepend(...lines.map((line) => el('li', { className: 'latest', textContent: line })));
+    while (this.list.children.length > MAX_ENTRIES) this.list.lastElementChild!.remove();
+    this.element.hidden = false;
+  }
+}
