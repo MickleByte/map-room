@@ -1,5 +1,6 @@
 /** Lists the visible stack on the selected tile and offers orders for the selected unit. */
 import { shipFor } from '../core/cargo';
+import { cannotDrop, cannotPatrol } from '../core/combat/air';
 import { hasBombard } from '../core/combat/bombard';
 import { fullMoves } from '../core/movement';
 import { maxHp, type UnitTypeDef } from '../core/ruleset';
@@ -14,6 +15,9 @@ export interface UnitPanelActions {
   fortify(): void;
   board(): void;
   goAshore(): void;
+  airSuperiority(): void;
+  /** Start or cancel choosing where to paradrop. */
+  paradrop(): void;
   next(): void;
   cancelOrders(): void;
 }
@@ -23,7 +27,8 @@ export class UnitPanel {
 
   constructor(private readonly actions: UnitPanelActions) {}
 
-  show(vision: Vision, tile: Coord | null, selected: UnitId | null): void {
+  /** `dropping`: the selected unit is choosing where to paradrop. */
+  show(vision: Vision, tile: Coord | null, selected: UnitId | null, dropping = false): void {
     this.element.replaceChildren();
     const { state } = vision;
     const units = tile ? vision.unitsAt(tile).filter((u) => u.carriedBy === null) : [];
@@ -55,6 +60,19 @@ export class UnitPanel {
       if (port && unit.carriedBy !== null && typeOf(state, unit).domain === 'land') {
         buttons.append(el('button', { textContent: 'Go ashore', onclick: () => this.actions.goAshore() }));
       }
+      if (!cannotPatrol(state, unit)) {
+        buttons.append(
+          el('button', { textContent: 'Air superiority (A)', onclick: () => this.actions.airSuperiority() }),
+        );
+      }
+      if (!cannotDrop(state, unit)) {
+        buttons.append(
+          el('button', {
+            textContent: dropping ? 'Cancel paradrop' : 'Paradrop (P)',
+            onclick: () => this.actions.paradrop(),
+          }),
+        );
+      }
       if (unit.orders) {
         buttons.append(
           el('button', { textContent: 'Cancel go-to', onclick: () => this.actions.cancelOrders() }),
@@ -65,7 +83,7 @@ export class UnitPanel {
         buttons,
         el('p', {
           className: 'hint',
-          textContent: hint(state, unit),
+          textContent: hint(state, unit, dropping),
         }),
       );
     }
@@ -80,7 +98,12 @@ export class UnitPanel {
   ): HTMLElement {
     const def = typeOf(state, u);
     const owner = state.players.find((p) => p.id === u.owner)!;
+    // An enemy fighter's stance is not the player's to see.
+    const mine = u.owner === currentPlayer(state).id;
+    const sortie = u.stance === 'airSuperiority' ? 'Air superiority' : u.actedThisTurn ? 'Flown' : null;
     const status = [
+      mine && def.domain === 'air' ? sortie : null,
+      u.justParadropped ? 'Dropped' : null,
       u.fortified ? 'Fortified' : null,
       u.orders ? 'Go-to' : null,
       cargo ? 'Aboard' : null,
@@ -110,8 +133,13 @@ export class UnitPanel {
 }
 
 /** How to give the selected unit orders with the mouse. */
-function hint(state: GameState, unit: Unit): string {
+function hint(state: GameState, unit: Unit, dropping: boolean): string {
   const def = typeOf(state, unit);
+  if (def.domain === 'air') return airHint(state, unit);
+  if (dropping) return 'Right-click a tile in the green zone to drop there. Esc cancels.';
+  if (!cannotDrop(state, unit)) {
+    return `${attackHint(def)} Or paradrop (P) up to ${def.paradropRange} tiles from this city.`;
+  }
   if (unit.carriedBy !== null) {
     return def.domain === 'land'
       ? 'Aboard ship. Right-click adjacent land to go ashore (not onto enemies), or another transport to change ships.'
@@ -121,6 +149,16 @@ function hint(state: GameState, unit: Unit): string {
     return `Carries up to ${def.cargo.capacity} ${def.cargo.domain === 'land' ? 'land units' : 'aircraft'}. ${attackHint(def)}`;
   }
   return attackHint(def);
+}
+
+function airHint(state: GameState, unit: Unit): string {
+  const def = typeOf(state, unit);
+  if (unit.stance === 'airSuperiority')
+    return `On air superiority until your next turn: it intercepts the first enemy bomber flying a mission within ${def.operationalRange} tiles.`;
+  if (unit.actedThisTurn) return 'This aircraft has flown this turn.';
+  const bomb = def.bombardStrength > 0 ? 'an enemy to bomb it, ' : '';
+  const patrol = def.airSuperiority ? ' Or put it on air superiority (A) to guard against bombers.' : '';
+  return `Right-click in the blue range: ${bomb}a friendly city or carrier to rebase there, or any other tile to fly recon.${patrol}`;
 }
 
 function attackHint(def: UnitTypeDef): string {

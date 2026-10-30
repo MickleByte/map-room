@@ -15,7 +15,7 @@ export function sightOf(state: GameState, unit: Unit): number {
   return typeOf(state, unit).sight + terrain.sightBonus;
 }
 
-/** The tile indices a player can see right now, from their units and cities. */
+/** The tile indices a player can see right now, from their units, cities and recon. */
 export function visibleTiles(state: GameState, player: PlayerId): Set<number> {
   const seen = new Set<number>();
   const look = (from: Coord, radius: number) => {
@@ -27,6 +27,7 @@ export function visibleTiles(state: GameState, player: PlayerId): Set<number> {
   for (const city of Object.values(state.cities)) {
     if (city.owner === player) look(city.pos, state.ruleset.citySight);
   }
+  for (const c of state.players.find((p) => p.id === player)?.revealed ?? []) look(c, 0);
   return seen;
 }
 

@@ -508,6 +508,18 @@
       "owner": "blue",
       "x": 3,
       "y": 36
+    },
+    {
+      "type": "bomber",
+      "owner": "red",
+      "x": 7,
+      "y": 22
+    },
+    {
+      "type": "paratrooper",
+      "owner": "red",
+      "x": 7,
+      "y": 22
     }
   ]
 }

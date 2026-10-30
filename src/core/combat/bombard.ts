@@ -78,13 +78,20 @@ export function previewBombard(state: GameState, unit: Unit, target: Coord): Bom
 
 /** Carry out a legal bombard (see cannotBombard) of an on-map tile. Mutates a draft state. */
 export function resolveBombard(state: GameState, unit: Unit, to: Coord, events: GameEvent[]): void {
-  const def = typeOf(state, unit);
   unit.movesLeft = 0;
   unit.fortified = false;
   unit.actedThisTurn = true;
   unit.orders = null;
+  fireShots(state, unit, bombardTarget(state, unit, to)!, events);
+}
 
-  const victim = bombardTarget(state, unit, to)!;
+/**
+ * Fire a unit's rate of fire at a target with its bombard strength, one RNG draw per
+ * shot, and report it with a `bombarded` event. Shared by bombards and bombing
+ * missions. Mutates a draft state.
+ */
+export function fireShots(state: GameState, unit: Unit, victim: Defender, events: GameEvent[]): void {
+  const def = typeOf(state, unit);
   const p = roundChance(def.bombardStrength, victim.defence.strength);
   const rng = new Rng(state.rng);
   const floor = def.lethalBombard ? 0 : 1;

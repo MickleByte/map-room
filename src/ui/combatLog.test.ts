@@ -82,6 +82,36 @@ describe('describeEvents', () => {
     ]);
   });
 
+  it('describes interceptions either way', () => {
+    const air = makeState({
+      cities: [
+        { name: 'Red', owner: 'red', x: 1, y: 1, size: 3, shieldsPerTurn: 1 },
+        { name: 'Blue', owner: 'blue', x: 5, y: 1, size: 3, shieldsPerTurn: 1 },
+      ],
+      units: [
+        { type: 'fighter', owner: 'red', x: 1, y: 1 },
+        { type: 'bomber', owner: 'blue', x: 5, y: 1 },
+      ],
+    });
+    const fighter = unitOf(air, 'fighter').id;
+    const bomber = unitOf(air, 'bomber').id;
+    const meet = { type: 'intercepted', fighter, bomber } as const;
+    expect(
+      describeEvents(air, [
+        { ...meet, rounds: ['A', 'D', 'A', 'A'], winner: fighter },
+        { type: 'unitDestroyed', unitId: bomber },
+      ]),
+    ).toEqual(['Red Interceptor intercepted and shot down Blue Strategic Bomber, winning 3 rounds to 1.']);
+    expect(
+      describeEvents(air, [
+        { ...meet, rounds: ['D', 'D'], winner: bomber },
+        { type: 'unitDestroyed', unitId: fighter },
+      ]),
+    ).toEqual([
+      'Red Interceptor intercepted Blue Strategic Bomber and was shot down, winning 0 rounds to 2.',
+    ]);
+  });
+
   it('says which units went down with a sunk ship', () => {
     const sea = makeState({
       terrain: ['ccoo'],

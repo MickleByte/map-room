@@ -32,6 +32,17 @@ export function describeEvents(before: GameState, events: GameEvent[]): string[]
         );
         break;
       }
+      case 'intercepted': {
+        fought.add(e.fighter).add(e.bomber);
+        const won = e.rounds.filter((r) => r === 'A').length;
+        const lost = e.rounds.length - won;
+        const what =
+          e.winner === e.fighter
+            ? `intercepted and shot down ${unitName(e.bomber)}`
+            : `intercepted ${unitName(e.bomber)} and was shot down`;
+        lines.push(`${unitName(e.fighter)} ${what}, winning ${won} round${won === 1 ? '' : 's'} to ${lost}.`);
+        break;
+      }
       case 'bombarded': {
         const count = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
         const damage = e.damage ? `${e.damage} HP lost` : 'no damage';

@@ -4,12 +4,22 @@
  */
 import { Application } from 'pixi.js';
 import { shipFor } from '../core/cargo';
+import {
+  cannotDrop,
+  cannotFlyMission,
+  cannotParadrop,
+  cannotRebase,
+  missionRange,
+  paradropRange,
+  previewMission,
+  type AirBase,
+} from '../core/combat/air';
 import { bombardRange, hasBombard, previewBombard } from '../core/combat/bombard';
 import { cannotAttack, previewAttack } from '../core/combat/resolve';
 import { coordsEqual, distance, isAdjacent } from '../core/grid';
 import { cannotEnter, findPath } from '../core/movement';
 import { applyAction } from '../core/reducer';
-import { currentPlayer, typeOf } from '../core/state';
+import { cityAt, currentPlayer, typeOf, unitsAt } from '../core/state';
 import type { Action, Coord, GameState, Unit, UnitId } from '../core/types';
 import { fogViewer, Vision } from '../core/visibility';
 import { Camera } from '../render/camera';
@@ -28,6 +38,8 @@ export class GameController {
   private tile: Coord | null = null;
   private unitId: UnitId | null = null;
   private hovered: { tile: Coord; screen: Point } | null = null;
+  /** The selected unit is choosing where to paradrop: right-click drops it. */
+  private dropping = false;
   private readonly unitPanel: UnitPanel;
   private readonly tilePanel = new TilePanel();
   private readonly topBar: TopBar;
@@ -52,6 +64,8 @@ export class GameController {
       fortify: () => this.fortify(),
       board: () => this.board(),
       goAshore: () => this.goAshore(),
+      airSuperiority: () => this.airSuperiority(),
+      paradrop: () => this.toggleParadrop(),
       next: () => this.nextUnit(),
       cancelOrders: () =>
         this.unitId !== null && this.dispatch({ type: 'setOrders', unitId: this.unitId, orders: null }),
@@ -120,6 +134,7 @@ export class GameController {
       const mine = here.filter((u) => u.owner === currentPlayer(this.state).id);
       const ready = mine.find((u) => u.movesLeft > 0 && !u.fortified);
       this.unitId = (ready ?? mine[0] ?? here[0])?.id ?? null;
+      this.dropping = false;
     }
     this.refresh();
   }
@@ -127,6 +142,7 @@ export class GameController {
   selectUnit(id: UnitId): void {
     const unit = this.state.units[id];
     if (!unit) return;
+    if (id !== this.unitId) this.dropping = false;
     this.unitId = id;
     this.tile = { ...unit.pos };
     this.refresh();
@@ -165,6 +181,16 @@ export class GameController {
     const unit = this.selectedUnit;
     if (!unit || unit.owner !== currentPlayer(this.state).id) return;
     if (coordsEqual(unit.pos, target)) return;
+    if (this.dropping) {
+      if (!this.dispatch({ type: 'paradrop', unitId: unit.id, to: target })) return;
+      this.dropping = false;
+      this.selectUnit(unit.id);
+      return;
+    }
+    if (typeOf(this.state, unit).domain === 'air') {
+      if (this.dispatch(this.airOrder(unit, target)) && this.state.units[unit.id]) this.selectUnit(unit.id);
+      return;
+    }
     const adjacent = isAdjacent(this.state.map, unit.pos, target);
     const strike = this.strikeAt(unit, target);
     let action: Action;
@@ -189,6 +215,28 @@ export class GameController {
     return adjacent ? 'attack' : null;
   }
 
+  /**
+   * What right-clicking a tile asks of an aircraft: rebase to a friendly city or carrier
+   * there, bomb a visible enemy, or otherwise fly recon.
+   */
+  private airOrder(unit: Unit, target: Coord): Action {
+    const base = this.baseAt(unit, target);
+    if (base) return { type: 'rebase', unitId: unit.id, to: base };
+    if (this.enemyVisibleAt(target) && typeOf(this.state, unit).bombardStrength > 0)
+      return { type: 'airMission', unitId: unit.id, mission: 'bomb', target };
+    return { type: 'airMission', unitId: unit.id, mission: 'recon', target };
+  }
+
+  /** A friendly city, or a carrier of the unit's owner, on a tile. */
+  private baseAt(unit: Unit, c: Coord): AirBase | null {
+    const city = cityAt(this.state, c);
+    if (city && city.owner === unit.owner) return { kind: 'city', id: city.id };
+    const carrier = unitsAt(this.state, c).find(
+      (u) => u.owner === unit.owner && typeOf(this.state, u).cargo?.domain === 'air',
+    );
+    return carrier ? { kind: 'carrier', id: carrier.id } : null;
+  }
+
   /** Whether the human can see enemy units on a tile; only those can be targeted. */
   private enemyVisibleAt(c: Coord): boolean {
     const me = currentPlayer(this.state).id;
@@ -205,6 +253,24 @@ export class GameController {
     const ship = unit && shipFor(this.state, unit, unit.pos);
     if (!unit || !ship) return;
     if (this.dispatch({ type: 'board', unitId: unit.id, carrierId: ship.id })) this.selectUnit(unit.id);
+  }
+
+  /** Put the selected fighter on air superiority. */
+  airSuperiority(): void {
+    if (this.unitId !== null) this.dispatch({ type: 'airSuperiority', unitId: this.unitId });
+  }
+
+  /** Start or stop choosing where the selected unit should paradrop. */
+  toggleParadrop(): void {
+    const unit = this.selectedUnit;
+    if (!unit) return;
+    const why = cannotDrop(this.state, unit);
+    if (why && !this.dropping) {
+      this.topBar.message(why);
+      return;
+    }
+    this.dropping = !this.dropping;
+    this.refresh();
   }
 
   /** Take the selected unit off its ship in port. */
@@ -259,10 +325,22 @@ export class GameController {
       case 'B':
         this.board();
         return true;
+      case 'a':
+      case 'A':
+        this.airSuperiority();
+        return true;
+      case 'p':
+      case 'P':
+        this.toggleParadrop();
+        return true;
       case 'Enter':
         this.endTurn();
         return true;
       case 'Escape':
+        if (this.dropping) {
+          this.toggleParadrop();
+          return true;
+        }
         this.unitId = null;
         this.selectTile(null);
         return true;
@@ -286,17 +364,75 @@ export class GameController {
     this.view.update(this.vision, this.unitId);
     this.minimap.update(this.vision);
     this.view.setSelection(this.tile);
-    const ready = unit && unit.owner === currentPlayer(this.state).id && unit.movesLeft > 0;
-    this.view.showRange(ready ? bombardRange(this.state, unit) : []);
+    this.showRange();
     this.tilePanel.show(this.vision, this.tile);
-    this.unitPanel.show(this.vision, this.tile, this.unitId);
+    this.unitPanel.show(this.vision, this.tile, this.unitId, this.dropping);
     this.topBar.show(this.state);
     this.updatePath();
+  }
+
+  /** Tint where the selected unit can reach: its paradrop zone, mission range or bombard range. */
+  private showRange(): void {
+    const unit = this.selectedUnit;
+    const own = unit && unit.owner === currentPlayer(this.state).id;
+    if (this.dropping && (!own || cannotDrop(this.state, unit))) this.dropping = false;
+    if (!own) this.view.showRange([]);
+    else if (this.dropping) this.view.showRange(paradropRange(this.state, unit), 'drop');
+    else if (typeOf(this.state, unit).domain === 'air')
+      this.view.showRange(missionRange(this.state, unit), 'air');
+    else this.view.showRange(unit.movesLeft > 0 ? bombardRange(this.state, unit) : []);
+  }
+
+  /** Hovering a tile with an aircraft selected, or while choosing a drop: what would happen. */
+  private previewSortie(unit: Unit, h: { tile: Coord; screen: Point }): void {
+    this.view.showPath(unit.pos, null, null);
+    if (this.dropping) {
+      this.showTip(cannotParadrop(this.state, unit, h.tile) ?? 'Paradrop here', h.screen);
+      return;
+    }
+    const action = this.airOrder(unit, h.tile);
+    if (action.type === 'rebase') {
+      const to = action.to;
+      const name =
+        to.kind === 'city'
+          ? this.state.cities[to.id]!.name
+          : `the ${typeOf(this.state, this.state.units[to.id]!).name}`;
+      this.showTip(cannotRebase(this.state, unit, to) ?? `Rebase to ${name}`, h.screen);
+    } else if (action.type === 'airMission' && action.mission === 'bomb') {
+      this.pathTip.hidden = true;
+      const preview = previewMission(this.state, unit, h.tile);
+      if (typeof preview === 'string') this.oddsTip.showReason(preview, h.screen);
+      else
+        this.oddsTip.showBombard(
+          this.state,
+          unit,
+          preview,
+          h.screen,
+          'A round trip: fighters may intercept.',
+        );
+    } else {
+      const why = cannotFlyMission(this.state, unit, 'recon', h.tile);
+      const radius = this.state.ruleset.air.reconRadius;
+      this.showTip(why ?? `Recon: shows ${radius} tiles around until the turn ends`, h.screen);
+    }
+  }
+
+  private showTip(text: string, at: Point): void {
+    this.pathTip.textContent = text;
+    this.pathTip.style.left = `${at.x + 14}px`;
+    this.pathTip.style.top = `${at.y + 14}px`;
+    this.pathTip.hidden = false;
   }
 
   private updatePath(): void {
     const unit = this.selectedUnit;
     const h = this.hovered;
+    const sortie = unit && h && unit.owner === currentPlayer(this.state).id && !coordsEqual(unit.pos, h.tile);
+    if (sortie && (this.dropping || typeOf(this.state, unit).domain === 'air')) {
+      this.oddsTip.hide();
+      this.previewSortie(unit, h);
+      return;
+    }
     const canPlan =
       unit && h && unit.owner === currentPlayer(this.state).id && typeOf(this.state, unit).movement > 0;
     this.oddsTip.hide();
@@ -321,10 +457,9 @@ export class GameController {
     const path = findPath(this.state, unit, h.tile);
     this.view.showPath(unit.pos, path, h.tile);
     const turns = path?.at(-1)?.turn;
-    this.pathTip.textContent =
-      turns === undefined ? 'No route' : turns === 0 ? 'This turn' : `${turns + 1} turns`;
-    this.pathTip.style.left = `${h.screen.x + 14}px`;
-    this.pathTip.style.top = `${h.screen.y + 14}px`;
-    this.pathTip.hidden = false;
+    this.showTip(
+      turns === undefined ? 'No route' : turns === 0 ? 'This turn' : `${turns + 1} turns`,
+      h.screen,
+    );
   }
 }

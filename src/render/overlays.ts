@@ -47,15 +47,19 @@ export function drawPath(
   if (last) ctx.poly(diamond(tileCentre(last.pos), 1)).stroke({ width: 2, color: 0xffffff, alpha: 0.8 });
 }
 
-const RANGE_COLOUR = 0xe0533f;
+/** What a range overlay shows: a bombard's reach, aircraft missions, or a paradrop zone. */
+export type RangeKind = 'bombard' | 'air' | 'drop';
 
-/** Tint the tiles a unit's bombard can reach. */
-export function drawRange(ctx: GraphicsContext, tiles: Coord[]): void {
+const RANGE_COLOURS: Record<RangeKind, number> = { bombard: 0xe0533f, air: 0x4fa3e0, drop: 0x5cc26e };
+
+/** Tint the tiles a unit can reach with a bombard, a mission or a paradrop. */
+export function drawRange(ctx: GraphicsContext, tiles: Coord[], kind: RangeKind = 'bombard'): void {
   ctx.clear();
   if (!tiles.length) return;
+  const color = RANGE_COLOURS[kind];
   // A fill or stroke consumes every shape added since the last one, so draw each pass in one go.
   for (const c of tiles) ctx.poly(diamond(tileCentre(c), 1));
-  ctx.fill({ color: RANGE_COLOUR, alpha: 0.14 });
+  ctx.fill({ color, alpha: 0.14 });
   for (const c of tiles) ctx.poly(diamond(tileCentre(c), 1));
-  ctx.stroke({ width: 1, color: RANGE_COLOUR, alpha: 0.5 });
+  ctx.stroke({ width: 1, color, alpha: 0.5 });
 }

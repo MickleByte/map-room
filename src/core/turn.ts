@@ -6,6 +6,8 @@ import type { GameEvent, GameState, Unit } from './types';
 import { advanceOrders } from './units';
 
 export function endTurn(state: GameState, events: GameEvent[]): void {
+  // Recon reveals last until the end of the turn they were flown in.
+  currentPlayer(state).revealed = [];
   const count = state.players.length;
   let next = state.currentPlayer;
   do {
@@ -21,13 +23,17 @@ export function startTurn(state: GameState, events: GameEvent[]): void {
   const player = currentPlayer(state);
   events.push({ type: 'turnStarted', player: player.id, turn: state.turn });
 
+  // Interceptions are counted per enemy turn, so every fighter gets its quota back.
+  for (const unit of Object.values(state.units)) unit.interceptsLeft = state.ruleset.air.interceptsPerTurn;
+
   const units = unitsOf(state, player.id).sort((a, b) => a.id - b.id);
   for (const unit of units) {
     if (!unit.actedThisTurn) heal(state, unit);
     unit.movesLeft = fullMoves(state, unit);
     unit.actedThisTurn = false;
     unit.justParadropped = false;
-    unit.interceptsLeft = state.ruleset.air.interceptsPerTurn;
+    // Air superiority lasts through the enemy's turn and ends when the owner's comes round.
+    unit.stance = 'none';
   }
   for (const unit of units) {
     if (unit.orders && state.units[unit.id]) advanceOrders(state, unit, events);

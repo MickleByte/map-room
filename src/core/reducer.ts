@@ -4,6 +4,16 @@
  * result (ADR-0004).
  */
 import { produce } from 'immer';
+import {
+  cannotFlyMission,
+  cannotParadrop,
+  cannotPatrol,
+  cannotRebase,
+  resolveMission,
+  resolveParadrop,
+  resolveRebase,
+  startPatrol,
+} from './combat/air';
 import { cannotBombard, resolveBombard } from './combat/bombard';
 import { cannotAttack, resolveAttack } from './combat/resolve';
 import { cannotCarry } from './cargo';
@@ -110,10 +120,34 @@ const handlers: Handlers = {
     unit.orders = null;
     if (typeOf(state, unit).domain === 'air') unit.base = { kind: 'carrier', id: ship.id };
   },
-  airMission: notYet('Air missions'),
-  airSuperiority: notYet('Air superiority'),
-  rebase: notYet('Rebasing'),
-  paradrop: notYet('Paradropping'),
+  airMission(state, { unitId, mission, target }, events) {
+    const unit = ownUnit(state, unitId);
+    if (typeof unit === 'string') return unit;
+    const why = cannotFlyMission(state, unit, mission, target);
+    if (why) return why;
+    resolveMission(state, unit, mission, normalize(state.map, target)!, events);
+  },
+  airSuperiority(state, { unitId }) {
+    const unit = ownUnit(state, unitId);
+    if (typeof unit === 'string') return unit;
+    const why = cannotPatrol(state, unit);
+    if (why) return why;
+    startPatrol(unit);
+  },
+  rebase(state, { unitId, to }, events) {
+    const unit = ownUnit(state, unitId);
+    if (typeof unit === 'string') return unit;
+    const why = cannotRebase(state, unit, to);
+    if (why) return why;
+    resolveRebase(state, unit, to, events);
+  },
+  paradrop(state, { unitId, to }, events) {
+    const unit = ownUnit(state, unitId);
+    if (typeof unit === 'string') return unit;
+    const why = cannotParadrop(state, unit, to);
+    if (why) return why;
+    resolveParadrop(state, unit, normalize(state.map, to)!, events);
+  },
   setProduction: notYet('Production'),
 };
 

@@ -11,7 +11,7 @@ import { drawCities, drawMap, drawSelection } from './art';
 import type { Camera } from './camera';
 import { drawFog } from './fogLayer';
 import { worldWidth } from './iso';
-import { drawPath, drawRange } from './overlays';
+import { drawPath, drawRange, type RangeKind } from './overlays';
 import { drawUnits } from './unitLayer';
 
 interface Copy {
@@ -80,9 +80,9 @@ export class MapView {
     drawPath(this.path, from, path, target);
   }
 
-  /** Tint the tiles in the selected unit's bombard range (none to clear it). */
-  showRange(tiles: Coord[]): void {
-    drawRange(this.range, tiles);
+  /** Tint the tiles in the selected unit's bombard, mission or paradrop range (none to clear it). */
+  showRange(tiles: Coord[], kind?: RangeKind): void {
+    drawRange(this.range, tiles, kind);
   }
 
   private applyCamera(): void {

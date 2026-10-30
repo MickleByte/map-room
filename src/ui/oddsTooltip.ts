@@ -36,15 +36,24 @@ export class OddsTooltip {
     this.place(at);
   }
 
-  /** A bombard: the chance of each shot hitting and where the target's strength comes from. */
-  showBombard(state: GameState, unit: Unit, p: BombardPreview, at: Point): void {
+  /**
+   * A bombard or bombing mission: the chance of each shot hitting and where the
+   * target's strength comes from. `cost` says what it uses up.
+   */
+  showBombard(
+    state: GameState,
+    unit: Unit,
+    p: BombardPreview,
+    at: Point,
+    cost = 'Uses all remaining movement.',
+  ): void {
     const rows: [string, string][] = [[typeOf(state, unit).name, `Bombard ${formatStrength(p.strength)}`]];
     rows.push(...this.defenceRows(state, p.target, p.defence));
     const outcome = p.lethal ? 'Can destroy the target' : 'The target cannot fall below 1 HP';
     this.element.replaceChildren(
       el('div', { className: 'odds', textContent: `${p.shots} shots at ${formatPercent(p.hitChance)} each` }),
       el('dl', {}, ...rows.flatMap(([k, v]) => [el('dt', { textContent: k }), el('dd', { textContent: v })])),
-      el('div', { className: 'outcome', textContent: `${outcome}. Uses all remaining movement.` }),
+      el('div', { className: 'outcome', textContent: `${outcome}. ${cost}` }),
     );
     this.place(at);
   }

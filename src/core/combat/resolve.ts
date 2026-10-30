@@ -119,18 +119,8 @@ export function resolveAttack(state: GameState, attacker: Unit, target: Coord, e
 /** Combat rounds until one side is destroyed. Returns whether the attacker won. */
 function fight(state: GameState, attacker: Unit, defender: Defender, rng: Rng, events: GameEvent[]): boolean {
   const attack = typeOf(state, attacker).attack;
-  const p = roundChance(attack, defender.defence.strength);
   const target = defender.unit;
-  const rounds: CombatRound[] = [];
-  while (attacker.hp > 0 && target.hp > 0) {
-    if (rng.chance(p)) {
-      target.hp--;
-      rounds.push('A');
-    } else {
-      attacker.hp--;
-      rounds.push('D');
-    }
-  }
+  const rounds = combatRounds(attacker, target, roundChance(attack, defender.defence.strength), rng);
   const [winner, loser] = attacker.hp > 0 ? [attacker, target] : [target, attacker];
   events.push({
     type: 'combat',
@@ -144,6 +134,24 @@ function fight(state: GameState, attacker: Unit, defender: Defender, rng: Rng, e
   destroyUnit(state, loser, events);
   if (rng.chance(state.ruleset.combat.promotionChance)) promote(state, winner, events);
   return winner === attacker;
+}
+
+/**
+ * Fight combat rounds until one side reaches 0 HP, the attacker winning each round with
+ * chance p. Takes the HP off both units and returns who won each round. Mutates them.
+ */
+export function combatRounds(attacker: Unit, defender: Unit, p: number, rng: Rng): CombatRound[] {
+  const rounds: CombatRound[] = [];
+  while (attacker.hp > 0 && defender.hp > 0) {
+    if (rng.chance(p)) {
+      defender.hp--;
+      rounds.push('A');
+    } else {
+      attacker.hp--;
+      rounds.push('D');
+    }
+  }
+  return rounds;
 }
 
 /** Move up one veteran level, gaining the extra HP that comes with it. */
