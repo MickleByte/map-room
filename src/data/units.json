@@ -1,0 +1,146 @@
+{
+  "infantry": {
+    "name": "Line Infantry",
+    "domain": "land",
+    "attack": 4,
+    "defence": 10,
+    "movement": 1,
+    "sight": 1,
+    "cost": 90,
+    "canCaptureCities": true
+  },
+  "mechInfantry": {
+    "name": "Mechanised Infantry",
+    "domain": "land",
+    "attack": 6,
+    "defence": 18,
+    "movement": 3,
+    "sight": 1,
+    "cost": 110,
+    "canCaptureCities": true
+  },
+  "armour": {
+    "name": "Battle Tank",
+    "domain": "land",
+    "attack": 24,
+    "defence": 16,
+    "movement": 3,
+    "sight": 1,
+    "cost": 140,
+    "canCaptureCities": true
+  },
+  "antiTank": {
+    "name": "Tank Hunter",
+    "domain": "land",
+    "attack": 10,
+    "defence": 14,
+    "movement": 1,
+    "sight": 1,
+    "cost": 80,
+    "canCaptureCities": true
+  },
+  "artillery": {
+    "name": "Field Battery",
+    "domain": "land",
+    "attack": 0,
+    "defence": 0,
+    "movement": 1,
+    "bombardStrength": 12,
+    "bombardRange": 2,
+    "rateOfFire": 2,
+    "sight": 1,
+    "cost": 80
+  },
+  "radarArtillery": {
+    "name": "Radar Battery",
+    "domain": "land",
+    "attack": 0,
+    "defence": 0,
+    "movement": 2,
+    "bombardStrength": 18,
+    "bombardRange": 3,
+    "rateOfFire": 3,
+    "sight": 2,
+    "cost": 120
+  },
+  "paratrooper": {
+    "name": "Airborne Infantry",
+    "domain": "land",
+    "attack": 6,
+    "defence": 9,
+    "movement": 1,
+    "sight": 1,
+    "cost": 100,
+    "canCaptureCities": true,
+    "paradropRange": 6
+  },
+  "fighter": {
+    "name": "Interceptor",
+    "domain": "air",
+    "attack": 8,
+    "defence": 4,
+    "movement": 0,
+    "bombardStrength": 2,
+    "rateOfFire": 1,
+    "operationalRange": 6,
+    "sight": 2,
+    "cost": 100,
+    "airSuperiority": true
+  },
+  "bomber": {
+    "name": "Strategic Bomber",
+    "domain": "air",
+    "attack": 0,
+    "defence": 3,
+    "movement": 0,
+    "bombardStrength": 16,
+    "rateOfFire": 3,
+    "operationalRange": 10,
+    "sight": 2,
+    "cost": 140
+  },
+  "transport": {
+    "name": "Troopship",
+    "domain": "sea",
+    "attack": 0,
+    "defence": 6,
+    "movement": 5,
+    "sight": 1,
+    "cost": 100,
+    "cargo": { "capacity": 4, "domain": "land" }
+  },
+  "destroyer": {
+    "name": "Escort Destroyer",
+    "domain": "sea",
+    "attack": 12,
+    "defence": 10,
+    "movement": 8,
+    "bombardStrength": 6,
+    "bombardRange": 1,
+    "rateOfFire": 1,
+    "sight": 2,
+    "cost": 100
+  },
+  "battleship": {
+    "name": "Dreadnought",
+    "domain": "sea",
+    "attack": 18,
+    "defence": 18,
+    "movement": 5,
+    "bombardStrength": 12,
+    "bombardRange": 2,
+    "rateOfFire": 3,
+    "sight": 2,
+    "cost": 180
+  },
+  "carrier": {
+    "name": "Fleet Carrier",
+    "domain": "sea",
+    "attack": 0,
+    "defence": 10,
+    "movement": 5,
+    "sight": 2,
+    "cost": 160,
+    "cargo": { "capacity": 4, "domain": "air" }
+  }
+}

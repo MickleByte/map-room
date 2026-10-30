@@ -1,0 +1,123 @@
+{
+  "terrain": {
+    "grassland": {
+      "name": "Grassland",
+      "char": "g",
+      "domain": "land",
+      "moveCost": 1,
+      "defenceBonus": 0,
+      "sightBonus": 0
+    },
+    "plains": {
+      "name": "Plains",
+      "char": "p",
+      "domain": "land",
+      "moveCost": 1,
+      "defenceBonus": 0,
+      "sightBonus": 0
+    },
+    "desert": {
+      "name": "Desert",
+      "char": "d",
+      "domain": "land",
+      "moveCost": 1,
+      "defenceBonus": 0.1,
+      "sightBonus": 0
+    },
+    "tundra": {
+      "name": "Tundra",
+      "char": "t",
+      "domain": "land",
+      "moveCost": 1,
+      "defenceBonus": 0,
+      "sightBonus": 0
+    },
+    "forest": {
+      "name": "Forest",
+      "char": "f",
+      "domain": "land",
+      "moveCost": 2,
+      "defenceBonus": 0.25,
+      "sightBonus": 0
+    },
+    "jungle": {
+      "name": "Jungle",
+      "char": "j",
+      "domain": "land",
+      "moveCost": 2,
+      "defenceBonus": 0.25,
+      "sightBonus": 0
+    },
+    "marsh": {
+      "name": "Marsh",
+      "char": "s",
+      "domain": "land",
+      "moveCost": 2,
+      "defenceBonus": 0.2,
+      "sightBonus": 0
+    },
+    "hills": {
+      "name": "Hills",
+      "char": "h",
+      "domain": "land",
+      "moveCost": 2,
+      "defenceBonus": 0.5,
+      "sightBonus": 1
+    },
+    "mountains": {
+      "name": "Mountains",
+      "char": "m",
+      "domain": "land",
+      "moveCost": 3,
+      "defenceBonus": 1,
+      "sightBonus": 1
+    },
+    "coast": {
+      "name": "Coast",
+      "char": "c",
+      "domain": "sea",
+      "moveCost": 1,
+      "defenceBonus": 0,
+      "sightBonus": 0
+    },
+    "ocean": {
+      "name": "Ocean",
+      "char": "o",
+      "domain": "sea",
+      "moveCost": 1,
+      "defenceBonus": 0,
+      "sightBonus": 0
+    }
+  },
+  "combat": {
+    "riverBonus": 0.25,
+    "fortifiedBonus": 0.25,
+    "fortressBonus": 0.5,
+    "cityTiers": [
+      { "minSize": 1, "bonus": 0, "wallsBonus": 1 },
+      { "minSize": 7, "bonus": 0.5, "wallsBonus": 0 },
+      { "minSize": 13, "bonus": 1, "wallsBonus": 0 }
+    ],
+    "promotionChance": 0.2
+  },
+  "veteranLevels": [
+    { "id": "conscript", "name": "Conscript", "hp": 2 },
+    { "id": "regular", "name": "Regular", "hp": 3 },
+    { "id": "veteran", "name": "Veteran", "hp": 4 },
+    { "id": "elite", "name": "Elite", "hp": 5 }
+  ],
+  "movement": {
+    "roadCostThirds": 1,
+    "railCostThirds": 0,
+    "attackCostThirds": 3
+  },
+  "healing": {
+    "perTurn": 1,
+    "fullInFriendlyCity": true
+  },
+  "air": {
+    "interceptsPerTurn": 1,
+    "reconRadius": 2
+  },
+  "citySight": 2
+}
