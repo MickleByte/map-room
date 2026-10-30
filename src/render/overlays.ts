@@ -1,4 +1,4 @@
-/** Planning overlays: the path preview for the selected unit. */
+/** Planning overlays: the path preview and bombard range for the selected unit. */
 import type { GraphicsContext } from 'pixi.js';
 import type { PathStep } from '../core/movement';
 import type { Coord } from '../core/types';
@@ -45,4 +45,17 @@ export function drawPath(
   });
   const last = path.at(-1);
   if (last) ctx.poly(diamond(tileCentre(last.pos), 1)).stroke({ width: 2, color: 0xffffff, alpha: 0.8 });
+}
+
+const RANGE_COLOUR = 0xe0533f;
+
+/** Tint the tiles a unit's bombard can reach. */
+export function drawRange(ctx: GraphicsContext, tiles: Coord[]): void {
+  ctx.clear();
+  if (!tiles.length) return;
+  // A fill or stroke consumes every shape added since the last one, so draw each pass in one go.
+  for (const c of tiles) ctx.poly(diamond(tileCentre(c), 1));
+  ctx.fill({ color: RANGE_COLOUR, alpha: 0.14 });
+  for (const c of tiles) ctx.poly(diamond(tileCentre(c), 1));
+  ctx.stroke({ width: 1, color: RANGE_COLOUR, alpha: 0.5 });
 }

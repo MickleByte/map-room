@@ -1,4 +1,4 @@
-/** The combat log: a running list of fights, promotions and captures. */
+/** The combat log: a running list of fights, bombards, promotions and captures. */
 import { typeOf } from '../core/state';
 import type { GameEvent, GameState, UnitId } from '../core/types';
 import { el } from './dom';
@@ -29,6 +29,16 @@ export function describeEvents(before: GameState, events: GameEvent[]): string[]
         lines.push(
           `${unitName(e.attacker)} (${formatStrength(e.attack)}) ${verb} ${unitName(e.defender)} ` +
             `(${formatStrength(e.defence.strength)}), winning ${won} round${won === 1 ? '' : 's'} to ${lost}.`,
+        );
+        break;
+      }
+      case 'bombarded': {
+        const count = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+        const damage = e.damage ? `${e.damage} HP lost` : 'no damage';
+        lines.push(
+          `${unitName(e.unitId)} (${formatStrength(e.strength)}) bombarded ${unitName(e.target)} ` +
+            `(${formatStrength(e.defence.strength)}): ${count(e.hits, 'hit', 'hits')}, ` +
+            `${count(e.misses, 'miss', 'misses')}, ${damage}.`,
         );
         break;
       }

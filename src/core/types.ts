@@ -159,7 +159,19 @@ export type GameEvent =
       /** The defender's strength, itemised. */
       defence: DefenceBreakdown;
     }
-  | { type: 'bombarded'; unitId: UnitId; target: UnitId; hits: number; misses: number }
+  | {
+      type: 'bombarded';
+      unitId: UnitId;
+      target: UnitId;
+      hits: number;
+      misses: number;
+      /** HP actually lost: hits past the 1 HP floor do nothing. */
+      damage: number;
+      /** The bombarding unit's bombard strength. */
+      strength: number;
+      /** The target's strength, itemised. */
+      defence: DefenceBreakdown;
+    }
   | { type: 'intercepted'; fighter: UnitId; bomber: UnitId; rounds: CombatRound[]; winner: UnitId }
   | { type: 'unitDestroyed'; unitId: UnitId }
   | { type: 'unitCaptured'; unitId: UnitId; newOwner: PlayerId }

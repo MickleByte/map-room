@@ -4,6 +4,7 @@
  * result (ADR-0004).
  */
 import { produce } from 'immer';
+import { cannotBombard, resolveBombard } from './combat/bombard';
 import { cannotAttack, resolveAttack } from './combat/resolve';
 import { isAdjacent, normalize } from './grid';
 import { cannotEnter, findPath } from './movement';
@@ -74,11 +75,18 @@ const handlers: Handlers = {
     resolveAttack(state, unit, normalize(state.map, target)!, events);
   },
 
+  bombard(state, { unitId, target }, events) {
+    const unit = ownUnit(state, unitId);
+    if (typeof unit === 'string') return unit;
+    const why = cannotBombard(state, unit, target);
+    if (why) return why;
+    resolveBombard(state, unit, normalize(state.map, target)!, events);
+  },
+
   endTurn(state, _action, events) {
     endTurn(state, events);
   },
 
-  bombard: notYet('Bombardment'),
   board: notYet('Boarding'),
   airMission: notYet('Air missions'),
   airSuperiority: notYet('Air superiority'),

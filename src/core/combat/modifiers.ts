@@ -2,7 +2,7 @@
  * The defence modifier stack, itemised so the UI can show where a defender's strength
  * comes from. Bonuses add together, then multiply the base defence once.
  */
-import { isRiverCrossing, tileAt } from '../grid';
+import { isAdjacent, isRiverCrossing, tileAt } from '../grid';
 import { cityAt, typeOf } from '../state';
 import type { Coord, GameState, Unit } from '../types';
 
@@ -20,7 +20,10 @@ export interface DefenceBreakdown {
   strength: number;
 }
 
-/** A unit's defence against an attack coming from the adjacent tile `from`. */
+/**
+ * A unit's defence against an attack or bombard coming from `from`. A river only counts
+ * when `from` is adjacent and the attack crosses it.
+ */
 export function defenceOf(state: GameState, unit: Unit, from: Coord): DefenceBreakdown {
   const { combat } = state.ruleset;
   const tile = tileAt(state.map, unit.pos);
@@ -30,7 +33,8 @@ export function defenceOf(state: GameState, unit: Unit, from: Coord): DefenceBre
   const add = (label: string, bonus: number) => bonus > 0 && items.push({ label, bonus });
 
   add(terrain.name, terrain.defenceBonus);
-  if (isRiverCrossing(state.map, from, unit.pos)) add('River', combat.riverBonus);
+  if (isAdjacent(state.map, from, unit.pos) && isRiverCrossing(state.map, from, unit.pos))
+    add('River', combat.riverBonus);
   if (def.domain === 'land' && (unit.fortified || tile.fortress)) add('Fortified', combat.fortifiedBonus);
   if (def.domain === 'land' && tile.fortress) add('Fortress', combat.fortressBonus);
 

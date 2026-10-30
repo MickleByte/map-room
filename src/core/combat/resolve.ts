@@ -49,9 +49,17 @@ export interface Defender {
  * HP, then the oldest unit. Null when nothing there can defend.
  */
 export function bestDefender(state: GameState, attacker: Unit, target: Coord): Defender | null {
+  return strongest(state, defendersAt(state, attacker, target), attacker.pos);
+}
+
+/**
+ * The unit with the highest defence after modifiers against a strike from `from`, then
+ * the most HP, then the oldest. Null for no units.
+ */
+export function strongest(state: GameState, units: Unit[], from: Coord): Defender | null {
   let best: Defender | null = null;
-  for (const unit of defendersAt(state, attacker, target).sort((a, b) => a.id - b.id)) {
-    const defence = defenceOf(state, unit, attacker.pos);
+  for (const unit of [...units].sort((a, b) => a.id - b.id)) {
+    const defence = defenceOf(state, unit, from);
     const s = best?.defence.strength ?? -1;
     if (defence.strength > s || (defence.strength === s && unit.hp > best!.unit.hp)) {
       best = { unit, defence };

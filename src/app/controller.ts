@@ -3,8 +3,9 @@
  * becomes core Actions here; applyAction is the only thing that changes the state.
  */
 import { Application } from 'pixi.js';
-import { previewAttack } from '../core/combat/resolve';
-import { coordsEqual, isAdjacent } from '../core/grid';
+import { bombardRange, hasBombard, previewBombard } from '../core/combat/bombard';
+import { cannotAttack, previewAttack } from '../core/combat/resolve';
+import { coordsEqual, distance, isAdjacent } from '../core/grid';
 import { cannotEnter, findPath } from '../core/movement';
 import { applyAction } from '../core/reducer';
 import { currentPlayer, typeOf } from '../core/state';
@@ -154,20 +155,35 @@ export class GameController {
   // ---- orders ----
 
   /**
-   * Right-click: attack an adjacent enemy, step to an adjacent tile, or set a go-to
-   * order for anywhere further.
+   * Right-click: attack an adjacent enemy or bombard one in range, step to an adjacent
+   * tile, or set a go-to order for anywhere further.
    */
   orderSelectedTo(target: Coord): void {
     const unit = this.selectedUnit;
     if (!unit || unit.owner !== currentPlayer(this.state).id) return;
     if (coordsEqual(unit.pos, target)) return;
     const adjacent = isAdjacent(this.state.map, unit.pos, target);
+    const strike = this.strikeAt(unit, target);
     let action: Action;
-    if (adjacent && this.enemyVisibleAt(target)) action = { type: 'attack', unitId: unit.id, target };
+    if (strike) action = { type: strike, unitId: unit.id, target };
     else if (adjacent && unit.movesLeft > 0 && !cannotEnter(this.state, unit, target))
       action = { type: 'move', unitId: unit.id, to: target };
     else action = { type: 'setOrders', unitId: unit.id, orders: { kind: 'goto', target } };
     if (this.dispatch(action) && this.state.units[unit.id]) this.selectUnit(unit.id);
+  }
+
+  /**
+   * How the unit would strike visible enemies on a tile: attack when it legally can,
+   * otherwise bombard if the tile is in range, otherwise attack an adjacent tile (to
+   * report why not). Null when there is no visible enemy to strike.
+   */
+  private strikeAt(unit: Unit, target: Coord): 'attack' | 'bombard' | null {
+    if (!this.enemyVisibleAt(target)) return null;
+    const adjacent = isAdjacent(this.state.map, unit.pos, target);
+    if (adjacent && !cannotAttack(this.state, unit, target)) return 'attack';
+    const def = typeOf(this.state, unit);
+    if (hasBombard(def) && distance(this.state.map, unit.pos, target) <= def.bombardRange) return 'bombard';
+    return adjacent ? 'attack' : null;
   }
 
   /** Whether the human can see enemy units on a tile; only those can be targeted. */
@@ -248,6 +264,8 @@ export class GameController {
     this.view.update(this.vision, this.unitId);
     this.minimap.update(this.vision);
     this.view.setSelection(this.tile);
+    const ready = unit && unit.owner === currentPlayer(this.state).id && unit.movesLeft > 0;
+    this.view.showRange(ready ? bombardRange(this.state, unit) : []);
     this.tilePanel.show(this.vision, this.tile);
     this.unitPanel.show(this.vision, this.tile, this.unitId);
     this.topBar.show(this.state);
@@ -265,12 +283,17 @@ export class GameController {
       this.pathTip.hidden = true;
       return;
     }
-    if (isAdjacent(this.state.map, unit.pos, h.tile) && this.enemyVisibleAt(h.tile)) {
+    const strike = this.strikeAt(unit, h.tile);
+    if (strike) {
       this.view.showPath(unit.pos, null, null);
       this.pathTip.hidden = true;
-      const preview = previewAttack(this.state, unit, h.tile);
+      const preview =
+        strike === 'attack'
+          ? previewAttack(this.state, unit, h.tile)
+          : previewBombard(this.state, unit, h.tile);
       if (typeof preview === 'string') this.oddsTip.showReason(preview, h.screen);
-      else this.oddsTip.show(this.state, unit, preview, h.screen);
+      else if ('odds' in preview) this.oddsTip.show(this.state, unit, preview, h.screen);
+      else this.oddsTip.showBombard(this.state, unit, preview, h.screen);
       return;
     }
     const path = findPath(this.state, unit, h.tile);

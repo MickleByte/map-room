@@ -47,6 +47,21 @@ describe('describeEvents', () => {
     ]);
   });
 
+  it('describes a bombard: hits, misses and the damage done', () => {
+    const shot = { type: 'bombarded', unitId: gun, target: tank, strength: 12, defence } as const;
+    expect(
+      describeEvents(before, [
+        { ...shot, hits: 1, misses: 1, damage: 1 },
+        { ...shot, hits: 3, misses: 0, damage: 2 },
+        { ...shot, hits: 2, misses: 0, damage: 0 },
+      ]),
+    ).toEqual([
+      'Blue Field Battery (12) bombarded Red Battle Tank (12.5): 1 hit, 1 miss, 1 HP lost.',
+      'Blue Field Battery (12) bombarded Red Battle Tank (12.5): 3 hits, 0 misses, 2 HP lost.',
+      'Blue Field Battery (12) bombarded Red Battle Tank (12.5): 2 hits, 0 misses, no damage.',
+    ]);
+  });
+
   it('describes a lost attack, and units lost outside combat', () => {
     const events: GameEvent[] = [
       {

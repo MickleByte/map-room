@@ -11,7 +11,7 @@ import { drawCities, drawMap, drawSelection } from './art';
 import type { Camera } from './camera';
 import { drawFog } from './fogLayer';
 import { worldWidth } from './iso';
-import { drawPath } from './overlays';
+import { drawPath, drawRange } from './overlays';
 import { drawUnits } from './unitLayer';
 
 interface Copy {
@@ -26,6 +26,7 @@ export class MapView {
   private readonly fog = new GraphicsContext();
   private readonly selection = new GraphicsContext();
   private readonly path = new GraphicsContext();
+  private readonly range = new GraphicsContext();
   private unitShapes = new GraphicsContext();
 
   constructor(
@@ -42,6 +43,7 @@ export class MapView {
         new Graphics(terrain),
         copy.cities,
         new Graphics(this.fog),
+        new Graphics(this.range),
         new Graphics(this.selection),
         new Graphics(this.path),
         copy.units,
@@ -76,6 +78,11 @@ export class MapView {
 
   showPath(from: Coord, path: PathStep[] | null, target: Coord | null): void {
     drawPath(this.path, from, path, target);
+  }
+
+  /** Tint the tiles in the selected unit's bombard range (none to clear it). */
+  showRange(tiles: Coord[]): void {
+    drawRange(this.range, tiles);
   }
 
   private applyCamera(): void {

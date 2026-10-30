@@ -1,6 +1,7 @@
 /** Lists the visible stack on the selected tile and offers orders for the selected unit. */
+import { hasBombard } from '../core/combat/bombard';
 import { fullMoves } from '../core/movement';
-import { maxHp } from '../core/ruleset';
+import { maxHp, type UnitTypeDef } from '../core/ruleset';
 import { cargoOf, currentPlayer, typeOf } from '../core/state';
 import type { Coord, GameState, Unit, UnitId } from '../core/types';
 import type { Vision } from '../core/visibility';
@@ -52,7 +53,7 @@ export class UnitPanel {
         buttons,
         el('p', {
           className: 'hint',
-          textContent: 'Right-click a tile to move there, or an adjacent enemy to attack.',
+          textContent: hint(typeOf(state, unit)),
         }),
       );
     }
@@ -87,4 +88,13 @@ export class UnitPanel {
     item.title = `${def.name}: attack ${def.attack}, defence ${def.defence}, movement ${def.movement}`;
     return item;
   }
+}
+
+/** How to give the selected unit orders with the mouse. */
+function hint(def: UnitTypeDef): string {
+  const attacks = def.attack > 0 && def.domain !== 'air';
+  if (attacks && hasBombard(def))
+    return 'Right-click a tile to move there, an adjacent enemy to attack, or an enemy in the red range to bombard.';
+  if (hasBombard(def)) return 'Right-click a tile to move there, or an enemy in the red range to bombard.';
+  return 'Right-click a tile to move there, or an adjacent enemy to attack.';
 }
