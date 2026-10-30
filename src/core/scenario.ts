@@ -3,7 +3,7 @@
  * (placement, cargo, bases), reporting every problem at once.
  */
 import { z } from 'zod';
-import { inBounds, neighbours, normalize, tileIndex } from './grid';
+import { inBounds, neighbours, step, tileIndex } from './grid';
 import { seedRng } from './rng';
 import {
   defaultRuleset,
@@ -46,7 +46,8 @@ export const scenarioSchema = z.object({
     wrapX: z.boolean().default(true),
     /** One string per row, one terrain char per tile. */
     terrain: z.array(z.string()),
-    rivers: z.array(z.object({ ...xy, side: z.enum(['N', 'E', 'S', 'W']) })).default([]),
+    /** Each river segment lies on one edge of a tile. */
+    rivers: z.array(z.object({ ...xy, side: z.enum(['NE', 'SE', 'SW', 'NW']) })).default([]),
     roads: z.array(z.tuple([int, int])).default([]),
     rails: z.array(z.tuple([int, int])).default([]),
     fortresses: z.array(z.tuple([int, int])).default([]),
@@ -265,8 +266,8 @@ function buildMap(s: Scenario, ruleset: Ruleset, issues: string[]): GameMap | nu
       if (!terrain) issues.push(`map.terrain[${y}][${x}]: unknown terrain char "${ch}"`);
       tiles.push({
         terrain: terrain ?? 'ocean',
-        riverEast: false,
-        riverSouth: false,
+        riverSE: false,
+        riverSW: false,
         road: false,
         rail: false,
         fortress: false,
@@ -280,13 +281,13 @@ function buildMap(s: Scenario, ruleset: Ruleset, issues: string[]): GameMap | nu
 
   s.map.rivers.forEach((r, i) => {
     if (!inBounds(map, r)) return issues.push(`map.rivers[${i}]: (${r.x}, ${r.y}) is off the map`);
-    // Store every river edge as the east or south edge of the tile on its west/north side.
-    const step = { N: { x: 0, y: -1 }, E: { x: 1, y: 0 }, S: { x: 0, y: 1 }, W: { x: -1, y: 0 } }[r.side];
-    const across = normalize(map, { x: r.x + step.x, y: r.y + step.y });
+    const across = step(map, r, r.side);
     if (!across) return issues.push(`map.rivers[${i}]: ${r.side} edge of (${r.x}, ${r.y}) is the map edge`);
-    const owner = r.side === 'E' || r.side === 'S' ? r : across;
-    if (r.side === 'E' || r.side === 'W') tile(owner).riverEast = true;
-    else tile(owner).riverSouth = true;
+    // Every river edge is stored as the SE or SW edge of the tile above it.
+    if (r.side === 'SE') tile(r).riverSE = true;
+    else if (r.side === 'SW') tile(r).riverSW = true;
+    else if (r.side === 'NE') tile(across).riverSW = true;
+    else tile(across).riverSE = true;
   });
 
   const place = (list: [number, number][], name: string, apply: (t: Tile) => void) =>

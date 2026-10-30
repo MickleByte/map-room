@@ -50,10 +50,10 @@ export interface GameMap {
 
 export interface Tile {
   terrain: TerrainId;
-  /** River on this tile's east edge; the west edge is read from the western neighbour. */
-  riverEast: boolean;
-  /** River on this tile's south edge; the north edge is read from the northern neighbour. */
-  riverSouth: boolean;
+  /** River on this tile's south-east edge; the north-west edge is read from the NW neighbour. */
+  riverSE: boolean;
+  /** River on this tile's south-west edge; the north-east edge is read from the NE neighbour. */
+  riverSW: boolean;
   road: boolean;
   /** Rail implies road. */
   rail: boolean;

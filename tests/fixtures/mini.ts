@@ -3,11 +3,12 @@ import type { GameMap } from '../../src/core/types';
 
 /**
  * An 8×6 two-player scenario. Red holds the west, Blue the east.
+ * Rows are staggered on screen (odd rows sit half a tile right); terrain is listed by row.
  *
  *     01234567
  *   0 oooooooo
  *   1 ocgggpco     Red city "Redhold" at (2,1), size 3, walls
- *   2 ocghfpco     river on the east edge of (3,2)
+ *   2 ocghfpco     river on the SE edge of (3,2)
  *   3 ocgmspco     Blue city "Bluehaven" at (5,3), size 8, coastal
  *   4 occcccco
  *   5 oooooooo
@@ -22,7 +23,7 @@ export function miniScenario(): ScenarioInput {
       height: 6,
       wrapX: false,
       terrain: ['oooooooo', 'ocgggpco', 'ocghfpco', 'ocgmspco', 'occcccco', 'oooooooo'],
-      rivers: [{ x: 3, y: 2, side: 'E' }],
+      rivers: [{ x: 3, y: 2, side: 'SE' }],
       roads: [
         [2, 1],
         [3, 1],
@@ -57,8 +58,8 @@ export function blankMap(width: number, height: number, wrapX: boolean): GameMap
     wrapX,
     tiles: Array.from({ length: width * height }, () => ({
       terrain: 'grassland',
-      riverEast: false,
-      riverSouth: false,
+      riverSE: false,
+      riverSW: false,
       road: false,
       rail: false,
       fortress: false,

@@ -121,8 +121,8 @@ interface GameMap {
 
 interface Tile {
   terrain: TerrainId;
-  riverEast: boolean; // river on this tile's east edge (in grid terms)
-  riverSouth: boolean; // river on this tile's south edge; north/west are read from neighbours
+  riverSE: boolean; // river on this tile's south-east edge; NW is read from the NW neighbour
+  riverSW: boolean; // river on this tile's south-west edge; NE is read from the NE neighbour
   road: boolean;
   rail: boolean; // implies road
   fortress: boolean;
@@ -303,7 +303,7 @@ Aircraft bombard range is "anywhere within operational range", so their Range co
 
 ## 4. Sample scenario: "The Straits"
 
-- A 60×40 map that wraps east–west. Two continents are split by a sea channel 3–6 tiles wide, with one land bridge guarded by a fortress line.
+- A map 60 columns wide by 80 staggered rows (about 60×40 tile-widths on screen) that wraps left–right. Two continents are split by a sea channel 3–6 tiles wide, with one land bridge guarded by a fortress line.
 - Rivers cross both continents, and there are hill ridges and a mountain spine on one side.
 - There are 6 cities per side, with sizes from 3 to 14 so every city-size tier shows up. Some cities have walls.
 - Starting forces bring every system into play within the first few turns:

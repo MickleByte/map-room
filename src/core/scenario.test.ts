@@ -33,8 +33,8 @@ describe('loadScenario', () => {
   });
 
   it('places rivers, roads, rails and fortresses', () => {
-    expect(hasRiver(state.map, { x: 3, y: 2 }, 'E')).toBe(true);
-    expect(hasRiver(state.map, { x: 4, y: 2 }, 'W')).toBe(true);
+    expect(hasRiver(state.map, { x: 3, y: 2 }, 'SE')).toBe(true);
+    expect(hasRiver(state.map, { x: 3, y: 3 }, 'NW')).toBe(true);
     expect(tileAt(state.map, { x: 2, y: 1 }).road).toBe(true);
     expect(tileAt(state.map, { x: 4, y: 1 })).toMatchObject({ road: true, rail: true });
     expect(tileAt(state.map, { x: 4, y: 2 }).fortress).toBe(true);
@@ -138,12 +138,12 @@ describe('loadScenario validation', () => {
       s.units!.push({ type: 'infantry', owner: 'green', x: 3, y: 1 });
       s.units!.push({ type: 'zeppelin', owner: 'red', x: 3, y: 1 });
       s.units!.push({ type: 'infantry', owner: 'red', x: 4, y: 1, veteran: 'conscript', hp: 3 });
-      s.map.rivers!.push({ x: 0, y: 2, side: 'W' });
+      s.map.rivers!.push({ x: 0, y: 2, side: 'SW' });
     });
     expect(issues).toContainEqual(expect.stringMatching(/unknown owner "green"/));
     expect(issues).toContainEqual(expect.stringMatching(/unknown unit type "zeppelin"/));
     expect(issues).toContainEqual(expect.stringMatching(/hp 3 exceeds conscript maximum of 2/));
-    expect(issues).toContainEqual(expect.stringMatching(/W edge of \(0, 2\) is the map edge/));
+    expect(issues).toContainEqual(expect.stringMatching(/SW edge of \(0, 2\) is the map edge/));
   });
 
   it('rejects enemies sharing a tile and units inside an enemy city', () => {
@@ -154,11 +154,12 @@ describe('loadScenario validation', () => {
     expect(issues).toContainEqual(expect.stringMatching(/inside blue's city "Bluehaven"/));
   });
 
-  it('allows a river on the west edge of column 0 when the map wraps', () => {
+  it('allows a river on the west side of column 0 when the map wraps', () => {
     const s = miniScenario();
     s.map.wrapX = true;
-    s.map.rivers!.push({ x: 0, y: 2, side: 'W' });
+    s.map.rivers!.push({ x: 0, y: 2, side: 'SW' }, { x: 0, y: 2, side: 'NW' });
     const state = loadScenario(s);
-    expect(tileAt(state.map, { x: 7, y: 2 }).riverEast).toBe(true);
+    expect(hasRiver(state.map, { x: 7, y: 3 }, 'NE')).toBe(true);
+    expect(tileAt(state.map, { x: 7, y: 1 }).riverSE).toBe(true);
   });
 });
