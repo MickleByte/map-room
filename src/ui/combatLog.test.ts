@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { makeState, unitOf } from '../../tests/fixtures/build';
+import { applyActions } from '../core/reducer';
 import type { GameEvent } from '../core/types';
-import { describeEvents } from './combatLog';
+import { describeBuilt, describeEvents } from './combatLog';
 
 describe('describeEvents', () => {
   const before = makeState({
@@ -112,6 +113,12 @@ describe('describeEvents', () => {
     ]);
   });
 
+  it('announces the winner', () => {
+    expect(describeEvents(before, [{ type: 'gameWon', winner: 'red' }])).toEqual([
+      'Red has taken every enemy city and won the game.',
+    ]);
+  });
+
   it('says which units went down with a sunk ship', () => {
     const sea = makeState({
       terrain: ['ccoo'],
@@ -126,6 +133,29 @@ describe('describeEvents', () => {
     expect(describeEvents(sea, events)).toEqual([
       'Blue Battle Tank went down with Blue Troopship.',
       'Blue Troopship was destroyed.',
+    ]);
+  });
+});
+
+describe('describeBuilt', () => {
+  const state = makeState({
+    cities: [
+      { name: 'Home', owner: 'red', x: 1, y: 1, size: 3, shieldsPerTurn: 100, queue: ['infantry'] },
+      { name: 'Away', owner: 'blue', x: 5, y: 1, size: 3, shieldsPerTurn: 140, queue: ['armour'] },
+    ],
+  });
+  // Blue's turn starts (Away builds), then Red's (Home builds).
+  const r = applyActions(state, [{ type: 'endTurn' }, { type: 'endTurn' }]);
+  if (!r.ok) throw new Error(r.reason);
+
+  it("lists the units finished in the viewer's own cities only", () => {
+    expect(describeBuilt(r.state, r.events, 'red')).toEqual(['Home built Line Infantry.']);
+  });
+
+  it('lists every city when there is no fog', () => {
+    expect(describeBuilt(r.state, r.events, null)).toEqual([
+      'Away built Battle Tank.',
+      'Home built Line Infantry.',
     ]);
   });
 });

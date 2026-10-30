@@ -20,14 +20,16 @@ import { coordsEqual, distance, isAdjacent } from '../core/grid';
 import { cannotEnter, findPath } from '../core/movement';
 import { applyAction } from '../core/reducer';
 import { cityAt, currentPlayer, typeOf, unitsAt } from '../core/state';
-import type { Action, Coord, GameState, Unit, UnitId } from '../core/types';
+import type { Action, City, Coord, GameEvent, GameState, Unit, UnitId } from '../core/types';
 import { fogViewer, Vision } from '../core/visibility';
 import { Camera } from '../render/camera';
 import { tileAtPoint, tileCentre, type Point } from '../render/iso';
 import { MapView } from '../render/mapView';
 import { Minimap } from '../render/minimap';
-import { CombatLog, describeEvents } from '../ui/combatLog';
+import { CityPanel } from '../ui/cityPanel';
+import { CombatLog, describeBuilt, describeEvents } from '../ui/combatLog';
 import { el } from '../ui/dom';
+import { EndScreen } from '../ui/endScreen';
 import { OddsTooltip } from '../ui/oddsTooltip';
 import { TilePanel } from '../ui/tilePanel';
 import { TopBar } from '../ui/topBar';
@@ -46,6 +48,10 @@ export class GameController {
   private readonly pathTip = el('div', { className: 'path-tip', hidden: true });
   private readonly oddsTip = new OddsTooltip();
   private readonly combatLog = new CombatLog();
+  private readonly cityPanel = new CityPanel((cityId, queue, repeat) =>
+    this.dispatch({ type: 'setProduction', cityId, queue, repeat }),
+  );
+  private readonly endScreen = new EndScreen(() => window.location.reload());
   private readonly minimap: Minimap;
   /** What the human player can see of the current state. */
   vision: Vision;
@@ -75,10 +81,12 @@ export class GameController {
       this.topBar.element,
       this.unitPanel.element,
       this.tilePanel.element,
+      this.cityPanel.element,
       this.pathTip,
       this.oddsTip.element,
       this.combatLog.element,
       this.minimap.element,
+      this.endScreen.element,
     );
   }
 
@@ -281,21 +289,26 @@ export class GameController {
   }
 
   endTurn(): void {
-    if (!this.dispatch({ type: 'endTurn' })) return;
-    // Until the AI exists (step 11), AI players pass their turn straight away.
+    const events: GameEvent[] = [];
+    if (!this.dispatch({ type: 'endTurn' }, events)) return;
+    // Until the AI exists (step 12), AI players pass their turn straight away.
     while (!this.state.winner && currentPlayer(this.state).control === 'ai') {
-      this.dispatch({ type: 'endTurn' });
+      this.dispatch({ type: 'endTurn' }, events);
     }
     this.unitId = null;
     this.nextUnit();
+    const built = describeBuilt(this.state, events, this.vision.player);
+    if (built.length) this.topBar.message(built.join(' '));
   }
 
-  dispatch(action: Action): boolean {
+  /** Apply an action for the human, reporting why not if it is refused. Events are appended to `events`. */
+  dispatch(action: Action, events: GameEvent[] = []): boolean {
     const result = applyAction(this.state, action);
     if (!result.ok) {
       this.topBar.message(result.reason);
       return false;
     }
+    events.push(...result.events);
     this.combatLog.add(describeEvents(this.state, result.events));
     this.state = result.state;
     if (this.unitId !== null && !this.state.units[this.unitId]) this.unitId = null;
@@ -366,9 +379,17 @@ export class GameController {
     this.view.setSelection(this.tile);
     this.showRange();
     this.tilePanel.show(this.vision, this.tile);
+    this.cityPanel.show(this.state, this.ownCity());
     this.unitPanel.show(this.vision, this.tile, this.unitId, this.dropping);
     this.topBar.show(this.state);
+    this.endScreen.show(this.state, this.vision.player);
     this.updatePath();
+  }
+
+  /** The current player's city on the selected tile, whose production they can edit. */
+  private ownCity(): City | null {
+    const city = this.tile && this.vision.cityAt(this.tile);
+    return city && city.owner === currentPlayer(this.state).id ? city : null;
   }
 
   /** Tint where the selected unit can reach: its paradrop zone, mission range or bombard range. */

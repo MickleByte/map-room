@@ -17,12 +17,14 @@ import {
 import { cannotBombard, resolveBombard } from './combat/bombard';
 import { cannotAttack, resolveAttack } from './combat/resolve';
 import { cannotCarry } from './cargo';
+import { cannotBuild } from './cities';
 import { coordsEqual, isAdjacent, normalize } from './grid';
 import { cannotEnter, findPath } from './movement';
 import { cityAt, currentPlayer, typeOf } from './state';
 import { endTurn } from './turn';
 import type { Action, ApplyResult, GameEvent, GameState, Unit } from './types';
 import { advanceOrders, moveUnit } from './units';
+import { checkVictory } from './victory';
 import { updateMemory } from './visibility';
 
 type Handler<A extends Action> = (state: GameState, action: A, events: GameEvent[]) => string | void;
@@ -35,8 +37,6 @@ function ownUnit(state: GameState, id: number): Unit | string {
   if (unit.owner !== currentPlayer(state).id) return 'That unit belongs to another player';
   return unit;
 }
-
-const notYet = (what: string) => () => `${what} is not available yet`;
 
 const handlers: Handlers = {
   move(state, { unitId, to }, events) {
@@ -148,7 +148,17 @@ const handlers: Handlers = {
     if (why) return why;
     resolveParadrop(state, unit, normalize(state.map, to)!, events);
   },
-  setProduction: notYet('Production'),
+  setProduction(state, { cityId, queue, repeat }) {
+    const city = state.cities[cityId];
+    if (!city) return `No city with id ${cityId}`;
+    if (city.owner !== currentPlayer(state).id) return 'That city belongs to another player';
+    for (const type of queue) {
+      const why = cannotBuild(state, city, type);
+      if (why) return why;
+    }
+    city.queue = [...queue];
+    city.repeat = repeat;
+  },
 };
 
 export function applyAction(state: GameState, action: Action): ApplyResult {
@@ -160,7 +170,9 @@ export function applyAction(state: GameState, action: Action): ApplyResult {
   let reason: string | undefined;
   const next = produce(state, (draft) => {
     reason = handler(draft, action, events) ?? undefined;
-    if (reason === undefined) updateMemory(draft);
+    if (reason !== undefined) return;
+    updateMemory(draft);
+    checkVictory(draft, events);
   });
   return reason !== undefined ? { ok: false, reason } : { ok: true, state: next, events };
 }

@@ -1,6 +1,6 @@
 /** The combat log: a running list of fights, bombards, promotions and captures. */
 import { typeOf } from '../core/state';
-import type { GameEvent, GameState, UnitId } from '../core/types';
+import type { GameEvent, GameState, PlayerId, UnitId } from '../core/types';
 import { el } from './dom';
 import { capitalise, formatStrength } from './format';
 
@@ -72,9 +72,26 @@ export function describeEvents(before: GameState, events: GameEvent[]): string[]
       case 'cityCaptured':
         lines.push(`${playerName(e.newOwner)} captured ${before.cities[e.cityId]?.name ?? 'a city'}.`);
         break;
+      case 'gameWon':
+        lines.push(`${playerName(e.winner)} has taken every enemy city and won the game.`);
+        break;
     }
   }
   return lines;
+}
+
+/**
+ * "City built Unit." for each unit finished in the viewer's cities (every city when
+ * `viewer` is null). Units are looked up in the state from after the action.
+ */
+export function describeBuilt(after: GameState, events: GameEvent[], viewer: PlayerId | null): string[] {
+  return events.flatMap((e) => {
+    if (e.type !== 'unitBuilt') return [];
+    const city = after.cities[e.cityId];
+    const unit = after.units[e.unitId];
+    if (!city || !unit || (viewer !== null && unit.owner !== viewer)) return [];
+    return [`${city.name} built ${typeOf(after, unit).name}.`];
+  });
 }
 
 export class CombatLog {

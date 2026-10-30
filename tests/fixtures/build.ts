@@ -3,9 +3,11 @@ import type { GameState, Unit } from '../../src/core/types';
 
 /**
  * A two-player (red, blue) test state. The map defaults to 12×12 grassland that does
- * not wrap; pass `terrain` rows to shape it.
+ * not wrap; pass `terrain` rows to shape it. Players have no victory conditions unless
+ * `victory` is set, so tests with cities on one side only don't end the game.
  */
 export function makeState(opts: {
+  victory?: boolean;
   terrain?: string[];
   width?: number;
   height?: number;
@@ -19,6 +21,7 @@ export function makeState(opts: {
 }): GameState {
   const width = opts.terrain?.[0]?.length ?? opts.width ?? 12;
   const height = opts.terrain?.length ?? opts.height ?? 12;
+  const goals = opts.victory ? [{ type: 'captureAllCities' as const }] : [];
   return loadScenario({
     id: 'test',
     name: 'Test',
@@ -34,8 +37,8 @@ export function makeState(opts: {
       rivers: opts.rivers ?? [],
     },
     players: [
-      { id: 'red', name: 'Red', colour: '#cc3333', control: 'human' },
-      { id: 'blue', name: 'Blue', colour: '#3333cc', control: 'ai' },
+      { id: 'red', name: 'Red', colour: '#cc3333', control: 'human', victoryConditions: goals },
+      { id: 'blue', name: 'Blue', colour: '#3333cc', control: 'ai', victoryConditions: goals },
     ],
     cities: opts.cities ?? [],
     units: opts.units ?? [],

@@ -5,15 +5,9 @@
 import { z } from 'zod';
 import { inBounds, neighbours, step, tileIndex } from './grid';
 import { seedRng } from './rng';
-import {
-  defaultRuleset,
-  formatIssues,
-  maxHp,
-  THIRDS_PER_MP,
-  type Ruleset,
-  type VeteranLevel,
-} from './ruleset';
+import { defaultRuleset, formatIssues, maxHp, type Ruleset, type VeteranLevel } from './ruleset';
 import type { City, Coord, GameMap, GameState, Player, Tile, Unit, UnitId } from './types';
+import { newUnit } from './units';
 import { updateMemory } from './visibility';
 
 const int = z.number().int();
@@ -165,23 +159,7 @@ export function loadScenario(json: unknown, ruleset: Ruleset = defaultRuleset): 
     }
     const max = maxHp(ruleset, vet);
     if (hp !== undefined && hp > max) issues.push(`${where}: hp ${hp} exceeds ${vet} maximum of ${max}`);
-    return {
-      id: nextId++,
-      type,
-      owner,
-      pos: { x: pos.x, y: pos.y },
-      hp: hp ?? max,
-      veteran: vet,
-      movesLeft: def.movement * THIRDS_PER_MP,
-      fortified: false,
-      actedThisTurn: false,
-      carriedBy: null,
-      base: null,
-      stance: 'none',
-      interceptsLeft: ruleset.air.interceptsPerTurn,
-      orders: null,
-      justParadropped: false,
-    };
+    return newUnit(ruleset, nextId++, type, owner, pos, vet, hp);
   };
 
   s.units.forEach((u, i) => {

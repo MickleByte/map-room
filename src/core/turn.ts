@@ -1,4 +1,5 @@
 /** Turn flow: ending one player's turn and starting the next. Mutates a draft state. */
+import { runProduction } from './cities';
 import { fullMoves } from './movement';
 import { maxHp } from './ruleset';
 import { cityAt, currentPlayer, unitsOf } from './state';
@@ -18,10 +19,16 @@ export function endTurn(state: GameState, events: GameEvent[]): void {
   startTurn(state, events);
 }
 
-/** Refresh the current player's units, then carry out their standing go-to orders. */
+/**
+ * The start of a player's turn: their cities produce, their units heal and get their
+ * movement back (stances end, interceptions reset), then standing go-to orders run.
+ */
 export function startTurn(state: GameState, events: GameEvent[]): void {
   const player = currentPlayer(state);
   events.push({ type: 'turnStarted', player: player.id, turn: state.turn });
+
+  const cities = Object.values(state.cities).filter((c) => c.owner === player.id);
+  for (const city of cities.sort((a, b) => a.id - b.id)) runProduction(state, city, events);
 
   // Interceptions are counted per enemy turn, so every fighter gets its quota back.
   for (const unit of Object.values(state.units)) unit.interceptsLeft = state.ruleset.air.interceptsPerTurn;

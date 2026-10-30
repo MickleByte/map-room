@@ -3,9 +3,39 @@ import { findPath, stepUses } from './movement';
 import { shipFor } from './cargo';
 import { normalize, tileAt } from './grid';
 import { captureCity } from './cities';
+import { maxHp, THIRDS_PER_MP, unitType, type Ruleset, type VeteranLevel } from './ruleset';
 import { cargoOf, cityAt, typeOf } from './state';
-import type { Coord, GameEvent, GameState, Unit } from './types';
+import type { Coord, GameEvent, GameState, PlayerId, Unit, UnitId } from './types';
 import { lookAround } from './visibility';
+
+/** A fresh unit at full movement, ready to act (full HP unless `hp` is given). */
+export function newUnit(
+  ruleset: Ruleset,
+  id: UnitId,
+  type: string,
+  owner: PlayerId,
+  pos: Coord,
+  veteran: VeteranLevel = 'regular',
+  hp?: number,
+): Unit {
+  return {
+    id,
+    type,
+    owner,
+    pos: { x: pos.x, y: pos.y },
+    hp: hp ?? maxHp(ruleset, veteran),
+    veteran,
+    movesLeft: unitType(ruleset, type).movement * THIRDS_PER_MP,
+    fortified: false,
+    actedThisTurn: false,
+    carriedBy: null,
+    base: null,
+    stance: 'none',
+    interceptsLeft: ruleset.air.interceptsPerTurn,
+    orders: null,
+    justParadropped: false,
+  };
+}
 
 /** Step a unit (and anything it carries) into an adjacent tile it is allowed to enter. */
 export function moveUnit(state: GameState, unit: Unit, to: Coord, events: GameEvent[]): void {
