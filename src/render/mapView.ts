@@ -4,38 +4,73 @@
  * and never shows more than one world width, so three copies always cover the screen.
  */
 import { Container, Graphics, GraphicsContext } from 'pixi.js';
-import type { Coord, GameState } from '../core/types';
+import type { PathStep } from '../core/movement';
+import type { Coord, GameState, UnitId } from '../core/types';
 import { drawCities, drawMap, drawSelection } from './art';
 import type { Camera } from './camera';
 import { worldWidth } from './iso';
+import { drawPath } from './overlays';
+import { drawUnits } from './unitLayer';
+
+interface Copy {
+  cities: Container;
+  units: Graphics;
+  labels: Container;
+}
 
 export class MapView {
   readonly root = new Container();
-  private readonly copies: Container[] = [];
-  private readonly terrain: GraphicsContext;
+  private readonly copies: Copy[] = [];
   private readonly selection = new GraphicsContext();
+  private readonly path = new GraphicsContext();
+  private unitShapes = new GraphicsContext();
 
   constructor(
-    private readonly state: GameState,
+    state: GameState,
     private readonly camera: Camera,
   ) {
-    this.terrain = drawMap(state);
+    const terrain = drawMap(state);
     const offsets = state.map.wrapX ? [-1, 0, 1] : [0];
     for (const k of offsets) {
-      const copy = new Container();
-      copy.x = k * worldWidth(state.map);
-      copy.addChild(new Graphics(this.terrain));
-      copy.addChild(drawCities(state));
-      copy.addChild(new Graphics(this.selection));
+      const layer = new Container();
+      layer.x = k * worldWidth(state.map);
+      const copy: Copy = { cities: new Container(), units: new Graphics(), labels: new Container() };
+      layer.addChild(
+        new Graphics(terrain),
+        copy.cities,
+        new Graphics(this.selection),
+        new Graphics(this.path),
+        copy.units,
+        copy.labels,
+      );
       this.copies.push(copy);
-      this.root.addChild(copy);
+      this.root.addChild(layer);
     }
     camera.onChange(() => this.applyCamera());
     this.applyCamera();
   }
 
+  /** Redraw everything that depends on the game state. */
+  update(state: GameState, selectedUnit: UnitId | null): void {
+    const old = this.unitShapes;
+    const drawing = drawUnits(state, selectedUnit);
+    this.unitShapes = drawing.shapes;
+    for (const copy of this.copies) {
+      copy.units.context = drawing.shapes;
+      copy.cities.removeChildren().forEach((c) => c.destroy({ children: true }));
+      copy.cities.addChild(drawCities(state));
+      copy.labels.removeChildren().forEach((c) => c.destroy({ children: true }));
+      copy.labels.addChild(drawing.labels());
+    }
+    old.destroy();
+  }
+
   setSelection(c: Coord | null): void {
     drawSelection(this.selection, c);
+  }
+
+  showPath(from: Coord, path: PathStep[] | null, target: Coord | null): void {
+    drawPath(this.path, from, path, target);
   }
 
   private applyCamera(): void {

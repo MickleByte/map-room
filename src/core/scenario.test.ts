@@ -84,6 +84,10 @@ describe('loadScenario', () => {
     expect(loadScenario(other).rng).not.toEqual(state.rng);
   });
 
+  it('stores unit positions as bare coordinates', () => {
+    for (const u of Object.values(state.units)) expect(Object.keys(u.pos).sort()).toEqual(['x', 'y']);
+  });
+
   it('produces plain JSON data', () => {
     expect(JSON.parse(JSON.stringify(state))).toEqual(state);
   });

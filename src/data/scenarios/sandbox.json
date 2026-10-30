@@ -276,5 +276,196 @@
       "shieldsPerTurn": 10
     }
   ],
-  "units": []
+  "units": [
+    {
+      "type": "infantry",
+      "owner": "red",
+      "x": 6,
+      "y": 8,
+      "fortified": true
+    },
+    {
+      "type": "mechInfantry",
+      "owner": "red",
+      "x": 6,
+      "y": 8,
+      "veteran": "veteran"
+    },
+    {
+      "type": "armour",
+      "owner": "red",
+      "x": 6,
+      "y": 6
+    },
+    {
+      "type": "artillery",
+      "owner": "red",
+      "x": 6,
+      "y": 6,
+      "veteran": "conscript"
+    },
+    {
+      "type": "infantry",
+      "owner": "red",
+      "x": 7,
+      "y": 22,
+      "fortified": true
+    },
+    {
+      "type": "mechInfantry",
+      "owner": "red",
+      "x": 7,
+      "y": 22,
+      "veteran": "veteran"
+    },
+    {
+      "type": "armour",
+      "owner": "red",
+      "x": 7,
+      "y": 20
+    },
+    {
+      "type": "artillery",
+      "owner": "red",
+      "x": 7,
+      "y": 20,
+      "veteran": "conscript"
+    },
+    {
+      "type": "infantry",
+      "owner": "red",
+      "x": 6,
+      "y": 36,
+      "fortified": true
+    },
+    {
+      "type": "mechInfantry",
+      "owner": "red",
+      "x": 6,
+      "y": 36,
+      "veteran": "veteran"
+    },
+    {
+      "type": "armour",
+      "owner": "red",
+      "x": 6,
+      "y": 34
+    },
+    {
+      "type": "artillery",
+      "owner": "red",
+      "x": 6,
+      "y": 34,
+      "veteran": "conscript"
+    },
+    {
+      "type": "infantry",
+      "owner": "blue",
+      "x": 22,
+      "y": 8,
+      "fortified": true
+    },
+    {
+      "type": "mechInfantry",
+      "owner": "blue",
+      "x": 22,
+      "y": 8,
+      "veteran": "veteran"
+    },
+    {
+      "type": "armour",
+      "owner": "blue",
+      "x": 22,
+      "y": 6
+    },
+    {
+      "type": "artillery",
+      "owner": "blue",
+      "x": 22,
+      "y": 6,
+      "veteran": "conscript"
+    },
+    {
+      "type": "infantry",
+      "owner": "blue",
+      "x": 22,
+      "y": 24,
+      "fortified": true
+    },
+    {
+      "type": "mechInfantry",
+      "owner": "blue",
+      "x": 22,
+      "y": 24,
+      "veteran": "veteran"
+    },
+    {
+      "type": "armour",
+      "owner": "blue",
+      "x": 22,
+      "y": 22
+    },
+    {
+      "type": "artillery",
+      "owner": "blue",
+      "x": 22,
+      "y": 22,
+      "veteran": "conscript"
+    },
+    {
+      "type": "infantry",
+      "owner": "blue",
+      "x": 21,
+      "y": 38,
+      "fortified": true
+    },
+    {
+      "type": "mechInfantry",
+      "owner": "blue",
+      "x": 21,
+      "y": 38,
+      "veteran": "veteran"
+    },
+    {
+      "type": "armour",
+      "owner": "blue",
+      "x": 21,
+      "y": 36
+    },
+    {
+      "type": "artillery",
+      "owner": "blue",
+      "x": 21,
+      "y": 36,
+      "veteran": "conscript"
+    },
+    {
+      "type": "fighter",
+      "owner": "red",
+      "x": 6,
+      "y": 8,
+      "veteran": "elite"
+    },
+    {
+      "type": "fighter",
+      "owner": "blue",
+      "x": 22,
+      "y": 8,
+      "veteran": "elite"
+    },
+    {
+      "type": "transport",
+      "owner": "blue",
+      "x": 23,
+      "y": 8,
+      "cargo": [
+        {
+          "type": "infantry"
+        },
+        {
+          "type": "antiTank"
+        }
+      ]
+    }
+  ]
 }

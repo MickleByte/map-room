@@ -1,4 +1,4 @@
-/** Mouse and keyboard → camera moves and tile clicks. */
+/** Mouse and keyboard → camera moves, tile clicks and hover. */
 import type { Camera } from '../render/camera';
 import type { Point } from '../render/iso';
 
@@ -6,14 +6,24 @@ const DRAG_THRESHOLD = 5;
 const KEY_PAN = 96;
 const WHEEL_ZOOM = 1.15;
 
-export function bindMapInput(
-  canvas: HTMLCanvasElement,
-  camera: Camera,
-  onClick: (screen: Point) => void,
-): void {
+export interface MapInputHandlers {
+  click(screen: Point): void;
+  rightClick(screen: Point): void;
+  hover(screen: Point | null): void;
+  /** Keys the camera doesn't use. Return true if handled. */
+  key(key: string): boolean;
+}
+
+export function bindMapInput(canvas: HTMLCanvasElement, camera: Camera, on: MapInputHandlers): void {
   let press: { start: Point; last: Point; dragging: boolean } | null = null;
 
+  canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+
   canvas.addEventListener('pointerdown', (e) => {
+    if (e.button === 2) {
+      on.rightClick({ x: e.offsetX, y: e.offsetY });
+      return;
+    }
     if (e.button !== 0) return;
     canvas.setPointerCapture(e.pointerId);
     const p = { x: e.offsetX, y: e.offsetY };
@@ -21,8 +31,11 @@ export function bindMapInput(
   });
 
   canvas.addEventListener('pointermove', (e) => {
-    if (!press) return;
     const p = { x: e.offsetX, y: e.offsetY };
+    if (!press) {
+      on.hover(p);
+      return;
+    }
     if (!press.dragging && Math.hypot(p.x - press.start.x, p.y - press.start.y) > DRAG_THRESHOLD) {
       press.dragging = true;
     }
@@ -31,9 +44,11 @@ export function bindMapInput(
   });
 
   canvas.addEventListener('pointerup', (e) => {
-    if (press && !press.dragging) onClick({ x: e.offsetX, y: e.offsetY });
+    if (press && !press.dragging) on.click({ x: e.offsetX, y: e.offsetY });
     press = null;
   });
+
+  canvas.addEventListener('pointerleave', () => on.hover(null));
 
   canvas.addEventListener(
     'wheel',
@@ -53,13 +68,11 @@ export function bindMapInput(
       ArrowDown: [0, -KEY_PAN],
     };
     const d = pan[e.key];
-    if (d) {
-      e.preventDefault();
-      camera.panByScreen(d[0], d[1]);
-    } else if (e.key === '+' || e.key === '=') {
-      camera.zoomAt({ x: canvas.clientWidth / 2, y: canvas.clientHeight / 2 }, WHEEL_ZOOM);
-    } else if (e.key === '-') {
-      camera.zoomAt({ x: canvas.clientWidth / 2, y: canvas.clientHeight / 2 }, 1 / WHEEL_ZOOM);
-    }
+    const centre = { x: canvas.clientWidth / 2, y: canvas.clientHeight / 2 };
+    if (d) camera.panByScreen(d[0], d[1]);
+    else if (e.key === '+' || e.key === '=') camera.zoomAt(centre, WHEEL_ZOOM);
+    else if (e.key === '-') camera.zoomAt(centre, 1 / WHEEL_ZOOM);
+    else if (!on.key(e.key)) return;
+    e.preventDefault();
   });
 }

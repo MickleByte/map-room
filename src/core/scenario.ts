@@ -168,7 +168,7 @@ export function loadScenario(json: unknown, ruleset: Ruleset = defaultRuleset): 
       id: nextId++,
       type,
       owner,
-      pos: { ...pos },
+      pos: { x: pos.x, y: pos.y },
       hp: hp ?? max,
       veteran: vet,
       movesLeft: def.movement * THIRDS_PER_MP,

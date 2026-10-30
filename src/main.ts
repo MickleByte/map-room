@@ -8,7 +8,7 @@ async function start(): Promise<void> {
   if (!stage || !ui) throw new Error('#stage or #ui element missing');
 
   const state = loadScenario(sandbox);
-  const controller = await GameController.start(stage, ui, state);
+  const controller = await GameController.start(stage, ui, state, sandbox.name);
 
   // Test hook for Playwright: lets e2e tests drive the camera and selection directly.
   if (import.meta.env.DEV) Object.assign(window, { __mapRoom: controller });
