@@ -1,0 +1,7 @@
+dist
+node_modules
+e2e/.results
+playwright-report
+package-lock.json
+CLAUDE.md
+docs/agents
