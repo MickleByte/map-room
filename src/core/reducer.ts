@@ -10,6 +10,7 @@ import { currentPlayer, typeOf } from './state';
 import { endTurn } from './turn';
 import type { Action, ApplyResult, GameEvent, GameState, Unit } from './types';
 import { advanceOrders, moveUnit } from './units';
+import { updateMemory } from './visibility';
 
 type Handler<A extends Action> = (state: GameState, action: A, events: GameEvent[]) => string | void;
 type Handlers = { [T in Action['type']]: Handler<Extract<Action, { type: T }>> };
@@ -87,6 +88,7 @@ export function applyAction(state: GameState, action: Action): ApplyResult {
   let reason: string | undefined;
   const next = produce(state, (draft) => {
     reason = handler(draft, action, events) ?? undefined;
+    if (reason === undefined) updateMemory(draft);
   });
   return reason !== undefined ? { ok: false, reason } : { ok: true, state: next, events };
 }

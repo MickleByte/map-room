@@ -2,6 +2,7 @@
 import { Container, GraphicsContext, Graphics, Text } from 'pixi.js';
 import { DIRECTION_OFFSETS, DIRECTIONS, step, tileAt } from '../core/grid';
 import type { City, Coord, GameState } from '../core/types';
+import type { Vision } from '../core/visibility';
 import { diamond, HALF_H, HALF_W, tileCentre, type Point } from './iso';
 
 export const TERRAIN_COLOURS: Record<string, number> = {
@@ -169,10 +170,10 @@ function drawTerrainDetail(ctx: GraphicsContext, terrain: string, p: Point, c: C
   }
 }
 
-/** City markers and labels for one copy of the world. */
-export function drawCities(state: GameState): Container {
+/** City markers and labels for one copy of the world: the cities the viewer knows, as they know them. */
+export function drawCities(vision: Vision): Container {
   const layer = new Container();
-  for (const city of Object.values(state.cities)) layer.addChild(cityMarker(state, city));
+  for (const city of vision.cities()) layer.addChild(cityMarker(vision.state, city));
   return layer;
 }
 

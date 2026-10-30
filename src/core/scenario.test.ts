@@ -26,7 +26,7 @@ describe('loadScenario', () => {
     expect(tileAt(state.map, { x: 3, y: 3 }).terrain).toBe('mountains');
     expect(state.players.map((p) => p.id)).toEqual(['red', 'blue']);
     expect(state.players[0]!.victoryConditions).toEqual([{ type: 'captureAllCities' }]);
-    expect(state.players[0]!.remembered.every((t) => t === null)).toBe(true);
+    expect(state.players[0]!.remembered).toHaveLength(48);
     expect(Object.values(state.cities).map((c) => c.name)).toEqual(['Redhold', 'Bluehaven']);
     expect(state.currentPlayer).toBe(0);
     expect(state.turn).toBe(1);

@@ -14,6 +14,7 @@ import {
   type VeteranLevel,
 } from './ruleset';
 import type { City, Coord, GameMap, GameState, Player, Tile, Unit, UnitId } from './types';
+import { updateMemory } from './visibility';
 
 const int = z.number().int();
 const xy = { x: int.nonnegative(), y: int.nonnegative() };
@@ -233,7 +234,7 @@ export function loadScenario(json: unknown, ruleset: Ruleset = defaultRuleset): 
 
   if (issues.length) throw new ScenarioError(issues);
 
-  return {
+  const state: GameState = {
     schemaVersion: 1,
     scenarioId: s.id,
     ruleset,
@@ -247,6 +248,8 @@ export function loadScenario(json: unknown, ruleset: Ruleset = defaultRuleset): 
     rng: seedRng(s.seed),
     winner: null,
   };
+  updateMemory(state);
+  return state;
 }
 
 function buildMap(s: Scenario, ruleset: Ruleset, issues: string[]): GameMap | null {

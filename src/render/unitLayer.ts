@@ -8,6 +8,7 @@ import { tileIndex } from '../core/grid';
 import { maxHp } from '../core/ruleset';
 import { cityAt, currentPlayer, typeOf } from '../core/state';
 import type { GameState, Unit, UnitId } from '../core/types';
+import type { Vision } from '../core/visibility';
 import { tileCentre } from './iso';
 
 const TOKEN_W = 24;
@@ -20,11 +21,12 @@ export interface UnitDrawing {
   labels: () => Container;
 }
 
-/** Visible stacks: units not aboard a ship, grouped by tile. */
-function stacks(state: GameState): Map<number, Unit[]> {
+/** Stacks the viewer can see: units not aboard a ship on visible tiles, grouped by tile. */
+function stacks(vision: Vision): Map<number, Unit[]> {
+  const { state } = vision;
   const out = new Map<number, Unit[]>();
   for (const u of Object.values(state.units)) {
-    if (u.carriedBy !== null) continue;
+    if (u.carriedBy !== null || vision.at(u.pos) !== 'visible') continue;
     const k = tileIndex(state.map, u.pos);
     const list = out.get(k) ?? [];
     list.push(u);
@@ -44,12 +46,13 @@ export function topUnit(state: GameState, units: Unit[], selected: UnitId | null
   return [...units].sort((a, b) => score(b) - score(a) || a.id - b.id)[0]!;
 }
 
-export function drawUnits(state: GameState, selected: UnitId | null): UnitDrawing {
+export function drawUnits(vision: Vision, selected: UnitId | null): UnitDrawing {
+  const { state } = vision;
   const shapes = new GraphicsContext();
   const badges: { x: number; y: number; count: number }[] = [];
   const mover = currentPlayer(state).id;
 
-  for (const units of stacks(state).values()) {
+  for (const units of stacks(vision).values()) {
     const unit = topUnit(state, units, selected);
     const owner = state.players.find((p) => p.id === unit.owner)!;
     const colour = parseInt(owner.colour.slice(1), 16);

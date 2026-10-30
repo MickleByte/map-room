@@ -3,6 +3,7 @@ import { findPath, stepUses } from './movement';
 import { normalize } from './grid';
 import { cargoOf } from './state';
 import type { Coord, GameEvent, GameState, Unit } from './types';
+import { lookAround } from './visibility';
 
 /** Step a unit (and anything it carries) into an adjacent tile it is allowed to enter. */
 export function moveUnit(state: GameState, unit: Unit, to: Coord, events: GameEvent[]): void {
@@ -14,6 +15,7 @@ export function moveUnit(state: GameState, unit: Unit, to: Coord, events: GameEv
   unit.fortified = false;
   unit.actedThisTurn = true;
   for (const passenger of cargoOf(state, unit.id)) passenger.pos = { ...dest };
+  lookAround(state, unit);
   events.push({ type: 'unitMoved', unitId: unit.id, from, to: dest });
 }
 

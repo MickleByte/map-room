@@ -6,8 +6,10 @@
 import { Container, Graphics, GraphicsContext } from 'pixi.js';
 import type { PathStep } from '../core/movement';
 import type { Coord, GameState, UnitId } from '../core/types';
+import type { Vision } from '../core/visibility';
 import { drawCities, drawMap, drawSelection } from './art';
 import type { Camera } from './camera';
+import { drawFog } from './fogLayer';
 import { worldWidth } from './iso';
 import { drawPath } from './overlays';
 import { drawUnits } from './unitLayer';
@@ -21,6 +23,7 @@ interface Copy {
 export class MapView {
   readonly root = new Container();
   private readonly copies: Copy[] = [];
+  private readonly fog = new GraphicsContext();
   private readonly selection = new GraphicsContext();
   private readonly path = new GraphicsContext();
   private unitShapes = new GraphicsContext();
@@ -38,6 +41,7 @@ export class MapView {
       layer.addChild(
         new Graphics(terrain),
         copy.cities,
+        new Graphics(this.fog),
         new Graphics(this.selection),
         new Graphics(this.path),
         copy.units,
@@ -50,15 +54,16 @@ export class MapView {
     this.applyCamera();
   }
 
-  /** Redraw everything that depends on the game state. */
-  update(state: GameState, selectedUnit: UnitId | null): void {
+  /** Redraw everything that depends on the game state, as the viewer sees it. */
+  update(vision: Vision, selectedUnit: UnitId | null): void {
+    drawFog(this.fog, vision);
     const old = this.unitShapes;
-    const drawing = drawUnits(state, selectedUnit);
+    const drawing = drawUnits(vision, selectedUnit);
     this.unitShapes = drawing.shapes;
     for (const copy of this.copies) {
       copy.units.context = drawing.shapes;
       copy.cities.removeChildren().forEach((c) => c.destroy({ children: true }));
-      copy.cities.addChild(drawCities(state));
+      copy.cities.addChild(drawCities(vision));
       copy.labels.removeChildren().forEach((c) => c.destroy({ children: true }));
       copy.labels.addChild(drawing.labels());
     }

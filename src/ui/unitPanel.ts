@@ -1,8 +1,9 @@
-/** Lists the stack on the selected tile and offers orders for the selected unit. */
+/** Lists the visible stack on the selected tile and offers orders for the selected unit. */
 import { fullMoves } from '../core/movement';
 import { maxHp } from '../core/ruleset';
-import { cargoOf, currentPlayer, typeOf, unitsAt } from '../core/state';
+import { cargoOf, currentPlayer, typeOf } from '../core/state';
 import type { Coord, GameState, Unit, UnitId } from '../core/types';
+import type { Vision } from '../core/visibility';
 import { el } from './dom';
 import { capitalise, formatMoves } from './format';
 
@@ -18,9 +19,10 @@ export class UnitPanel {
 
   constructor(private readonly actions: UnitPanelActions) {}
 
-  show(state: GameState, tile: Coord | null, selected: UnitId | null): void {
+  show(vision: Vision, tile: Coord | null, selected: UnitId | null): void {
     this.element.replaceChildren();
-    const units = tile ? unitsAt(state, tile).filter((u) => u.carriedBy === null) : [];
+    const { state } = vision;
+    const units = tile ? vision.unitsAt(tile).filter((u) => u.carriedBy === null) : [];
     this.element.hidden = units.length === 0;
     if (!units.length) return;
 

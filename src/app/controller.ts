@@ -6,8 +6,9 @@ import { Application } from 'pixi.js';
 import { coordsEqual, isAdjacent } from '../core/grid';
 import { cannotEnter, findPath } from '../core/movement';
 import { applyAction } from '../core/reducer';
-import { currentPlayer, typeOf, unitsAt } from '../core/state';
+import { currentPlayer, typeOf } from '../core/state';
 import type { Action, Coord, GameState, Unit, UnitId } from '../core/types';
+import { fogViewer, Vision } from '../core/visibility';
 import { Camera } from '../render/camera';
 import { tileAtPoint, tileCentre, type Point } from '../render/iso';
 import { MapView } from '../render/mapView';
@@ -26,6 +27,9 @@ export class GameController {
   private readonly tilePanel = new TilePanel();
   private readonly topBar: TopBar;
   private readonly pathTip = el('div', { className: 'path-tip', hidden: true });
+  private readonly minimap: Minimap;
+  /** What the human player can see of the current state. */
+  vision: Vision;
 
   private constructor(
     public state: GameState,
@@ -34,6 +38,8 @@ export class GameController {
     ui: HTMLElement,
     scenarioName: string,
   ) {
+    this.vision = new Vision(state, fogViewer(state));
+    this.minimap = new Minimap(state, camera);
     this.unitPanel = new UnitPanel({
       select: (id) => this.selectUnit(id),
       fortify: () => this.fortify(),
@@ -42,7 +48,13 @@ export class GameController {
         this.unitId !== null && this.dispatch({ type: 'setOrders', unitId: this.unitId, orders: null }),
     });
     this.topBar = new TopBar(scenarioName, () => this.endTurn());
-    ui.append(this.topBar.element, this.unitPanel.element, this.tilePanel.element, this.pathTip);
+    ui.append(
+      this.topBar.element,
+      this.unitPanel.element,
+      this.tilePanel.element,
+      this.pathTip,
+      this.minimap.element,
+    );
   }
 
   static async start(
@@ -68,7 +80,6 @@ export class GameController {
     app.stage.addChild(view.root);
 
     const controller = new GameController(state, camera, view, ui, name);
-    ui.append(new Minimap(state, camera).element);
 
     const toTile = (screen: Point) => tileAtPoint(state.map, camera.screenToWorld(screen));
     bindMapInput(app.canvas, camera, {
@@ -93,7 +104,7 @@ export class GameController {
 
   selectTile(c: Coord | null): void {
     this.tile = c;
-    const here = c ? unitsAt(this.state, c).filter((u) => u.carriedBy === null) : [];
+    const here = c ? this.vision.unitsAt(c).filter((u) => u.carriedBy === null) : [];
     if (!here.some((u) => u.id === this.unitId)) {
       const mine = here.filter((u) => u.owner === currentPlayer(this.state).id);
       const ready = mine.find((u) => u.movesLeft > 0 && !u.fortified);
@@ -213,10 +224,15 @@ export class GameController {
   }
 
   refresh(): void {
-    this.view.update(this.state, this.unitId);
+    this.vision = new Vision(this.state, fogViewer(this.state));
+    // Drop the selection if the selected unit has gone out of sight.
+    const unit = this.selectedUnit;
+    if (unit && this.vision.at(unit.pos) !== 'visible') this.unitId = null;
+    this.view.update(this.vision, this.unitId);
+    this.minimap.update(this.vision);
     this.view.setSelection(this.tile);
-    this.tilePanel.show(this.state, this.tile);
-    this.unitPanel.show(this.state, this.tile, this.unitId);
+    this.tilePanel.show(this.vision, this.tile);
+    this.unitPanel.show(this.vision, this.tile, this.unitId);
     this.topBar.show(this.state);
     this.updatePath();
   }
