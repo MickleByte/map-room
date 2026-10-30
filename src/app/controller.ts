@@ -24,6 +24,8 @@ import type { Action, City, Coord, GameEvent, GameState, Unit, UnitId } from '..
 import { fogViewer, Vision } from '../core/visibility';
 import { Camera } from '../render/camera';
 import { tileAtPoint, tileCentre, type Point } from '../render/iso';
+import { effectsOf } from '../render/effects';
+import type { AnimationSpeed } from '../render/animator';
 import { MapView } from '../render/mapView';
 import { Minimap } from '../render/minimap';
 import { CityPanel } from '../ui/cityPanel';
@@ -34,6 +36,7 @@ import { OddsTooltip } from '../ui/oddsTooltip';
 import { TilePanel } from '../ui/tilePanel';
 import { TopBar } from '../ui/topBar';
 import { UnitPanel } from '../ui/unitPanel';
+import { AiClient } from './aiClient';
 import { bindMapInput } from './input';
 
 export class GameController {
@@ -55,6 +58,9 @@ export class GameController {
   private readonly minimap: Minimap;
   /** What the human player can see of the current state. */
   vision: Vision;
+  private readonly ai = new AiClient();
+  /** An AI turn is being planned or played back; the human's orders wait. */
+  private aiPlaying = false;
 
   private constructor(
     public state: GameState,
@@ -76,7 +82,19 @@ export class GameController {
       cancelOrders: () =>
         this.unitId !== null && this.dispatch({ type: 'setOrders', unitId: this.unitId, orders: null }),
     });
-    this.topBar = new TopBar(scenarioName, () => this.endTurn());
+    view.animator.speed = loadSpeed();
+    this.topBar = new TopBar(
+      scenarioName,
+      {
+        endTurn: () => void this.endTurn(),
+        skip: () => this.view.animator.skip(),
+        speed: (speed) => {
+          this.view.animator.speed = speed;
+          saveSpeed(speed);
+        },
+      },
+      view.animator.speed,
+    );
     ui.append(
       this.topBar.element,
       this.unitPanel.element,
@@ -186,6 +204,7 @@ export class GameController {
    * tile, or set a go-to order for anywhere further.
    */
   orderSelectedTo(target: Coord): void {
+    if (this.aiPlaying) return;
     const unit = this.selectedUnit;
     if (!unit || unit.owner !== currentPlayer(this.state).id) return;
     if (coordsEqual(unit.pos, target)) return;
@@ -288,21 +307,87 @@ export class GameController {
     if (this.dispatch({ type: 'move', unitId: unit.id, to: unit.pos })) this.selectUnit(unit.id);
   }
 
-  endTurn(): void {
+  /** Whether an AI turn is being planned or played back. */
+  get busy(): boolean {
+    return this.aiPlaying;
+  }
+
+  /** End the human's turn, then play every AI turn that follows. */
+  async endTurn(): Promise<void> {
+    if (this.aiPlaying) return;
     const events: GameEvent[] = [];
     if (!this.dispatch({ type: 'endTurn' }, events)) return;
-    // Until the AI exists (step 12), AI players pass their turn straight away.
-    while (!this.state.winner && currentPlayer(this.state).control === 'ai') {
-      this.dispatch({ type: 'endTurn' }, events);
-    }
+    await this.playAiTurns(events);
     this.unitId = null;
     this.nextUnit();
     const built = describeBuilt(this.state, events, this.vision.player);
     if (built.length) this.topBar.message(built.join(' '));
   }
 
+  /**
+   * Play AI turns until it is a human's turn or the game is over. Each turn is planned
+   * in the worker, then applied action by action through the reducer, animating what
+   * the human can see.
+   */
+  private async playAiTurns(events: GameEvent[]): Promise<void> {
+    if (this.state.winner || currentPlayer(this.state).control !== 'ai') return;
+    this.aiPlaying = true;
+    this.view.animator.reset();
+    this.topBar.setAiPlaying(true);
+    this.dropping = false;
+    this.refresh();
+    try {
+      while (!this.state.winner && currentPlayer(this.state).control === 'ai') {
+        const player = currentPlayer(this.state).id;
+        const turn = this.state.turn;
+        for (const action of await this.ai.decide(this.state, player)) {
+          if (this.state.winner) break;
+          await this.playAction(action, events);
+        }
+        // A plan should end its own turn; make sure play moves on if it didn't.
+        const stuck = currentPlayer(this.state).id === player && this.state.turn === turn;
+        if (stuck && !this.state.winner) await this.playAction({ type: 'endTurn' }, events);
+      }
+    } finally {
+      this.aiPlaying = false;
+      this.topBar.setAiPlaying(false);
+      this.refresh();
+    }
+  }
+
+  /** Apply one AI action, then show and log whatever of it the human can see. */
+  private async playAction(action: Action, events: GameEvent[]): Promise<void> {
+    const before = this.state;
+    const result = applyAction(before, action);
+    if (!result.ok) {
+      console.warn('The AI chose an action the rules refused:', action, result.reason);
+      return;
+    }
+    events.push(...result.events);
+    this.state = result.state;
+    const seenBefore = this.vision;
+    const seenAfter = new Vision(this.state, seenBefore.player);
+    const canSee = (c: Coord) => seenBefore.at(c) === 'visible' || seenAfter.at(c) === 'visible';
+    const effects = effectsOf(before, result.events, canSee);
+    const won = result.events.some((e) => e.type === 'gameWon');
+    if (effects.length || won) this.combatLog.add(describeEvents(before, result.events));
+    if (!effects.length || this.view.animator.skipped) {
+      // Nothing to see: update the view only now and then, so long turns stay quick.
+      this.vision = seenAfter;
+      if (won) this.refresh();
+      return;
+    }
+    if (this.unitId !== null && !this.state.units[this.unitId]) this.unitId = null;
+    this.refresh();
+    const focus = effects.find((e) => e.kind !== 'move') ?? effects[0]!;
+    const at = tileCentre(focus.kind === 'blast' ? focus.at : focus.to);
+    if (!this.camera.shows(at, 64)) this.camera.centreOn(at);
+    await this.view.animator.play(effects);
+  }
+
   /** Apply an action for the human, reporting why not if it is refused. Events are appended to `events`. */
   dispatch(action: Action, events: GameEvent[] = []): boolean {
+    if (this.aiPlaying) return false;
     const result = applyAction(this.state, action);
     if (!result.ok) {
       this.topBar.message(result.reason);
@@ -324,6 +409,10 @@ export class GameController {
   }
 
   key(key: string): boolean {
+    if (this.aiPlaying) {
+      if (key === 'Escape') this.view.animator.skip();
+      return key === 'Escape';
+    }
     switch (key) {
       case 'n':
       case 'N':
@@ -347,7 +436,7 @@ export class GameController {
         this.toggleParadrop();
         return true;
       case 'Enter':
-        this.endTurn();
+        void this.endTurn();
         return true;
       case 'Escape':
         if (this.dropping) {
@@ -482,5 +571,26 @@ export class GameController {
       turns === undefined ? 'No route' : turns === 0 ? 'This turn' : `${turns + 1} turns`,
       h.screen,
     );
+  }
+}
+
+const SPEED_KEY = 'mapRoom.aiSpeed';
+
+/** The AI playback speed this browser last chose (a per-viewer convenience). */
+function loadSpeed(): AnimationSpeed {
+  try {
+    const saved = localStorage.getItem(SPEED_KEY);
+    if (saved === 'slow' || saved === 'normal' || saved === 'fast') return saved;
+  } catch {
+    // Storage can be unavailable (private windows, blocked site data).
+  }
+  return 'normal';
+}
+
+function saveSpeed(speed: AnimationSpeed): void {
+  try {
+    localStorage.setItem(SPEED_KEY, speed);
+  } catch {
+    // Not remembered; it still applies for this session.
   }
 }

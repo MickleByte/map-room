@@ -76,6 +76,7 @@ test('a bomber shows its mission range and bombs an enemy in it', async ({ page 
 });
 
 test('recon reveals a hidden area, and a rebase moves the bomber', async ({ page }) => {
+  test.slow();
   await boot(page);
   const id = await select(page, 'bomber', BRINDLE, 0.7);
   const scout = { x: 14, y: 22 };
@@ -97,6 +98,9 @@ test('recon reveals a hidden area, and a rebase moves the bomber', async ({ page
 
   // Next turn, fly it to Corrow (6,36), 8 tiles away.
   await page.keyboard.press('Enter');
+  // Skip Blue's turn (if it is still playing).
+  await page.keyboard.press('Escape');
+  await expect(page.locator('.turn-info')).toContainText('Turn 2', { timeout: 30_000 });
   await select(page, 'bomber', BRINDLE, 0.7);
   const corrow = await screenPoint(page, { x: 6, y: 36 });
   await page.mouse.move(corrow.x, corrow.y);

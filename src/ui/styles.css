@@ -132,6 +132,26 @@ button:hover {
   background: #93701f;
 }
 
+.end-turn:disabled {
+  opacity: 0.45;
+  cursor: default;
+  background: #7a5a1c;
+}
+
+.top-bar .ai-speed {
+  font: inherit;
+  font-size: 13px;
+  color: var(--text-dim);
+  background: #26323f;
+  border: 1px solid var(--panel-border);
+  border-radius: 5px;
+  padding: 3px 6px;
+}
+
+.top-bar .skip {
+  border-color: var(--accent);
+}
+
 .toast {
   position: absolute;
   top: calc(100% + 8px);

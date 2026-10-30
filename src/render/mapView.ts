@@ -7,6 +7,7 @@ import { Container, Graphics, GraphicsContext } from 'pixi.js';
 import type { PathStep } from '../core/movement';
 import type { Coord, GameState, UnitId } from '../core/types';
 import type { Vision } from '../core/visibility';
+import { Animator } from './animator';
 import { drawCities, drawMap, drawSelection } from './art';
 import type { Camera } from './camera';
 import { drawFog } from './fogLayer';
@@ -27,6 +28,9 @@ export class MapView {
   private readonly selection = new GraphicsContext();
   private readonly path = new GraphicsContext();
   private readonly range = new GraphicsContext();
+  private readonly effects = new GraphicsContext();
+  /** Plays the AI's moves and strikes over the map. */
+  readonly animator = new Animator(this.effects);
   private unitShapes = new GraphicsContext();
 
   constructor(
@@ -48,6 +52,7 @@ export class MapView {
         new Graphics(this.path),
         copy.units,
         copy.labels,
+        new Graphics(this.effects),
       );
       this.copies.push(copy);
       this.root.addChild(layer);

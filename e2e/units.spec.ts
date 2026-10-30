@@ -84,9 +84,11 @@ test('hovering previews a path and right-clicking moves the unit', async ({ page
   await page.screenshot({ path: 'e2e/.results/units-moved.png' });
 });
 
-test('ending the turn passes through the AI and starts turn 2', async ({ page }) => {
+test('ending the turn plays the AI turn and starts turn 2', async ({ page }) => {
+  test.slow();
   await boot(page);
   await page.locator('.end-turn').click();
-  await expect(page.locator('.turn-info')).toContainText('Turn 2');
+  // Blue's turn plays back at normal speed first.
+  await expect(page.locator('.turn-info')).toContainText('Turn 2', { timeout: 30_000 });
   await expect(page.locator('.turn-info')).toContainText('Red');
 });

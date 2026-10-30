@@ -50,6 +50,20 @@ export class Camera {
     return { x: this.centre.x - width / 2, y: this.centre.y - height / 2, width, height };
   }
 
+  /** Whether a world point is on screen, with a margin in world pixels (any wrap copy counts). */
+  shows(p: Point, margin = 0): boolean {
+    const v = this.visibleWorld();
+    const inY = p.y >= v.y + margin && p.y <= v.y + v.height - margin;
+    const copies = this.map.wrapX ? [-1, 0, 1] : [0];
+    return (
+      inY &&
+      copies.some((k) => {
+        const x = p.x + k * worldWidth(this.map);
+        return x >= v.x + margin && x <= v.x + v.width - margin;
+      })
+    );
+  }
+
   /** The world offset to draw at, given the screen centre. */
   transform(): { scale: number; x: number; y: number } {
     return {

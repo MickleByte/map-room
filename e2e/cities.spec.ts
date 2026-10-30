@@ -96,6 +96,7 @@ test('enemy cities have no production panel', async ({ page }) => {
 });
 
 test('a finished unit appears in the city at the start of your turn', async ({ page }) => {
+  test.slow();
   await boot(page);
   // Nearly enough for Line Infantry (90): the next 10 shields finish it.
   await page.evaluate(() => {
@@ -120,7 +121,9 @@ test('a finished unit appears in the city at the start of your turn', async ({ p
     );
   const before = await infantryInAshford();
   await page.locator('.end-turn').click();
-  await expect(page.locator('.toast')).toHaveText('Ashford built Line Infantry.');
+  // Skip Blue's turn; the toast comes once it is over.
+  await page.keyboard.press('Escape');
+  await expect(page.locator('.toast')).toHaveText('Ashford built Line Infantry.', { timeout: 30_000 });
   expect(await infantryInAshford()).toBe(before + 1);
   expect(await ashford(page)).toMatchObject({ queue: [], shieldsStored: 5 });
 });
