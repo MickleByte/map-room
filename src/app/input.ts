@@ -14,7 +14,13 @@ export interface MapInputHandlers {
   key(key: string): boolean;
 }
 
-export function bindMapInput(canvas: HTMLCanvasElement, camera: Camera, on: MapInputHandlers): void {
+/** The keyboard listener lives on the window, so it stays until `signal` aborts. */
+export function bindMapInput(
+  canvas: HTMLCanvasElement,
+  camera: Camera,
+  signal: AbortSignal,
+  on: MapInputHandlers,
+): void {
   let press: { start: Point; last: Point; dragging: boolean } | null = null;
 
   canvas.addEventListener('contextmenu', (e) => e.preventDefault());
@@ -59,20 +65,24 @@ export function bindMapInput(canvas: HTMLCanvasElement, camera: Camera, on: MapI
     { passive: false },
   );
 
-  window.addEventListener('keydown', (e) => {
-    if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
-    const pan: Record<string, [number, number]> = {
-      ArrowLeft: [KEY_PAN, 0],
-      ArrowRight: [-KEY_PAN, 0],
-      ArrowUp: [0, KEY_PAN],
-      ArrowDown: [0, -KEY_PAN],
-    };
-    const d = pan[e.key];
-    const centre = { x: canvas.clientWidth / 2, y: canvas.clientHeight / 2 };
-    if (d) camera.panByScreen(d[0], d[1]);
-    else if (e.key === '+' || e.key === '=') camera.zoomAt(centre, WHEEL_ZOOM);
-    else if (e.key === '-') camera.zoomAt(centre, 1 / WHEEL_ZOOM);
-    else if (!on.key(e.key)) return;
-    e.preventDefault();
-  });
+  window.addEventListener(
+    'keydown',
+    (e) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      const pan: Record<string, [number, number]> = {
+        ArrowLeft: [KEY_PAN, 0],
+        ArrowRight: [-KEY_PAN, 0],
+        ArrowUp: [0, KEY_PAN],
+        ArrowDown: [0, -KEY_PAN],
+      };
+      const d = pan[e.key];
+      const centre = { x: canvas.clientWidth / 2, y: canvas.clientHeight / 2 };
+      if (d) camera.panByScreen(d[0], d[1]);
+      else if (e.key === '+' || e.key === '=') camera.zoomAt(centre, WHEEL_ZOOM);
+      else if (e.key === '-') camera.zoomAt(centre, 1 / WHEEL_ZOOM);
+      else if (!on.key(e.key)) return;
+      e.preventDefault();
+    },
+    { signal },
+  );
 }

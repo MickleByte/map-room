@@ -30,6 +30,13 @@ export class AiClient {
     });
   }
 
+  /** Shut the worker down when its game closes; pending plans are dropped. */
+  stop(): void {
+    this.worker?.terminate();
+    this.worker = null;
+    this.pending.clear();
+  }
+
   private start(): Worker | null {
     if (this.worker !== undefined) return this.worker;
     try {

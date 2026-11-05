@@ -1,5 +1,5 @@
 /**
- * Turn and player readout, the end-turn button, the AI playback controls (speed and
+ * Turn and player readout, the game menu button, the end-turn button, the AI playback controls (speed and
  * skip), and short messages.
  */
 import { currentPlayer } from '../core/state';
@@ -11,6 +11,7 @@ export interface TopBarActions {
   endTurn: () => void;
   skip: () => void;
   speed: (speed: AnimationSpeed) => void;
+  menu: () => void;
 }
 
 const SPEEDS: [AnimationSpeed, string][] = [
@@ -22,6 +23,7 @@ const SPEEDS: [AnimationSpeed, string][] = [
 export class TopBar {
   readonly element = el('header', { className: 'panel top-bar' });
   private readonly info = el('span', { className: 'turn-info' });
+  private readonly menuButton = el('button', { className: 'menu-button', textContent: 'Menu (M)' });
   private readonly endButton = el('button', { className: 'end-turn', textContent: 'End turn (Enter)' });
   private readonly skipButton = el('button', { className: 'skip', textContent: 'Skip (Esc)', hidden: true });
   private readonly speed = el(
@@ -35,10 +37,12 @@ export class TopBar {
 
   constructor(scenarioName: string, actions: TopBarActions, speed: AnimationSpeed) {
     this.endButton.onclick = actions.endTurn;
+    this.menuButton.onclick = actions.menu;
     this.skipButton.onclick = actions.skip;
     this.speed.value = speed;
     this.speed.onchange = () => actions.speed(this.speed.value as AnimationSpeed);
     this.element.append(
+      this.menuButton,
       el('strong', { textContent: scenarioName }),
       this.info,
       this.speed,
@@ -55,6 +59,7 @@ export class TopBar {
     const doing = this.aiPlaying ? ' is moving…' : '';
     this.info.replaceChildren(`Turn ${state.turn} · `, name, doing);
     this.endButton.disabled = this.aiPlaying;
+    this.menuButton.disabled = this.aiPlaying;
     this.skipButton.hidden = !this.aiPlaying;
   }
 

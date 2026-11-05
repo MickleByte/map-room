@@ -1,6 +1,7 @@
 /**
- * Owns the current GameState and wires it to the renderer and panels. Player input
- * becomes core Actions here; applyAction is the only thing that changes the state.
+ * Owns the current game (its state and action log) and wires it to the renderer and
+ * panels. Player input becomes core Actions here; applyAction is the only thing that
+ * changes the state, and every action it accepts, the human's or the AI's, is logged.
  */
 import { Application } from 'pixi.js';
 import { shipFor } from '../core/cargo';
@@ -28,16 +29,27 @@ import { effectsOf } from '../render/effects';
 import type { AnimationSpeed } from '../render/animator';
 import { MapView } from '../render/mapView';
 import { Minimap } from '../render/minimap';
+import { createSave, parseImport, saveToJson, scenarioToJson, type Game } from '../persistence/files';
+import { AUTOSAVE, deleteSave, listSaves, readSave, writeSave } from '../persistence/saves';
 import { CityPanel } from '../ui/cityPanel';
 import { CombatLog, describeBuilt, describeEvents } from '../ui/combatLog';
 import { el } from '../ui/dom';
 import { EndScreen } from '../ui/endScreen';
+import { downloadText, fileName, GameMenu } from '../ui/menus';
 import { OddsTooltip } from '../ui/oddsTooltip';
 import { TilePanel } from '../ui/tilePanel';
 import { TopBar } from '../ui/topBar';
 import { UnitPanel } from '../ui/unitPanel';
 import { AiClient } from './aiClient';
 import { bindMapInput } from './input';
+
+/** What the page around the controller provides: switching to another game. */
+export interface GameHost {
+  /** Replace the running game with this one. */
+  open(game: Game): Promise<void>;
+  /** Start the default scenario afresh. */
+  newGame(): Promise<void>;
+}
 
 export class GameController {
   private tile: Coord | null = null;
@@ -54,21 +66,51 @@ export class GameController {
   private readonly cityPanel = new CityPanel((cityId, queue, repeat) =>
     this.dispatch({ type: 'setProduction', cityId, queue, repeat }),
   );
-  private readonly endScreen = new EndScreen(() => window.location.reload());
+  private readonly endScreen: EndScreen;
+  private readonly menu: GameMenu;
   private readonly minimap: Minimap;
   /** What the human player can see of the current state. */
   vision: Vision;
   private readonly ai = new AiClient();
   /** An AI turn is being planned or played back; the human's orders wait. */
   private aiPlaying = false;
+  state: GameState;
+  /** Every action applied since the scenario started (ADR-0004). */
+  private readonly actions: Action[];
 
   private constructor(
-    public state: GameState,
+    private readonly start: Game,
     readonly camera: Camera,
     private readonly view: MapView,
-    ui: HTMLElement,
-    scenarioName: string,
+    private readonly ui: HTMLElement,
+    private readonly host: GameHost,
+    private readonly app: Application,
+    private readonly input: AbortController,
   ) {
+    const state = start.state;
+    this.state = state;
+    this.actions = [...start.actions];
+    this.endScreen = new EndScreen(() => void this.host.newGame());
+    this.menu = new GameMenu({
+      list: listSaves,
+      save: (name) => writeSave(createSave(this.game, name, new Date().toISOString())),
+      load: async (name) => this.host.open(await readSave(name)),
+      remove: deleteSave,
+      exportSlot: async (name) => {
+        const save = await readSave(name);
+        downloadText(fileName(save.name), saveToJson(save));
+      },
+      exportGame: () => {
+        const name = this.defaultSaveName();
+        downloadText(fileName(name), saveToJson(createSave(this.game, name, new Date().toISOString())));
+      },
+      exportScenario: () => downloadText(fileName(start.scenario.name), scenarioToJson(start.scenario)),
+      importText: async (text) => {
+        const imported = parseImport(text);
+        await this.host.open(imported.kind === 'save' ? imported.save : imported.game);
+      },
+      newGame: () => this.host.newGame(),
+    });
     this.vision = new Vision(state, fogViewer(state));
     this.minimap = new Minimap(state, camera);
     this.unitPanel = new UnitPanel({
@@ -84,8 +126,9 @@ export class GameController {
     });
     view.animator.speed = loadSpeed();
     this.topBar = new TopBar(
-      scenarioName,
+      start.scenario.name,
       {
+        menu: () => this.openMenu(),
         endTurn: () => void this.endTurn(),
         skip: () => this.view.animator.skip(),
         speed: (speed) => {
@@ -105,15 +148,17 @@ export class GameController {
       this.combatLog.element,
       this.minimap.element,
       this.endScreen.element,
+      this.menu.element,
     );
   }
 
   static async start(
     stage: HTMLElement,
     ui: HTMLElement,
-    state: GameState,
-    name: string,
+    game: Game,
+    host: GameHost,
   ): Promise<GameController> {
+    const state = game.state;
     const app = new Application();
     await app.init({
       resizeTo: window,
@@ -130,10 +175,11 @@ export class GameController {
     const view = new MapView(state, camera);
     app.stage.addChild(view.root);
 
-    const controller = new GameController(state, camera, view, ui, name);
+    const input = new AbortController();
+    const controller = new GameController(game, camera, view, ui, host, app, input);
 
     const toTile = (screen: Point) => tileAtPoint(state.map, camera.screenToWorld(screen));
-    bindMapInput(app.canvas, camera, {
+    bindMapInput(app.canvas, camera, input.signal, {
       click: (s) => controller.selectTile(toTile(s)),
       rightClick: (s) => {
         const t = toTile(s);
@@ -145,6 +191,43 @@ export class GameController {
     controller.refresh();
     controller.nextUnit();
     return controller;
+  }
+
+  /** The game as it stands: its scenario, initial state, action log and current state. */
+  get game(): Game {
+    return {
+      scenario: this.start.scenario,
+      initialState: this.start.initialState,
+      actions: [...this.actions],
+      state: this.state,
+    };
+  }
+
+  /** Tear down the canvas, panels, input and AI worker before another game opens. */
+  destroy(): void {
+    this.input.abort();
+    this.ai.stop();
+    this.view.animator.skip();
+    this.app.destroy({ removeView: true }, { children: true });
+    this.ui.replaceChildren();
+  }
+
+  openMenu(): void {
+    if (!this.aiPlaying) this.menu.open(this.defaultSaveName());
+  }
+
+  private defaultSaveName(): string {
+    return `${this.start.scenario.name}, turn ${this.state.turn}`;
+  }
+
+  /** Overwrite the autosave slot with the game as it stands. */
+  private async autosave(): Promise<void> {
+    try {
+      await writeSave(createSave(this.game, AUTOSAVE, new Date().toISOString()));
+    } catch (e) {
+      console.warn('Autosave failed:', e);
+      this.topBar.message('The game could not be autosaved.');
+    }
   }
 
   // ---- selection ----
@@ -318,6 +401,7 @@ export class GameController {
     const events: GameEvent[] = [];
     if (!this.dispatch({ type: 'endTurn' }, events)) return;
     await this.playAiTurns(events);
+    if (currentPlayer(this.state).control === 'human') void this.autosave();
     this.unitId = null;
     this.nextUnit();
     const built = describeBuilt(this.state, events, this.vision.player);
@@ -364,6 +448,7 @@ export class GameController {
       return;
     }
     events.push(...result.events);
+    this.actions.push(action);
     this.state = result.state;
     const seenBefore = this.vision;
     const seenAfter = new Vision(this.state, seenBefore.player);
@@ -395,6 +480,7 @@ export class GameController {
     }
     events.push(...result.events);
     this.combatLog.add(describeEvents(this.state, result.events));
+    this.actions.push(action);
     this.state = result.state;
     if (this.unitId !== null && !this.state.units[this.unitId]) this.unitId = null;
     this.refresh();
@@ -413,7 +499,15 @@ export class GameController {
       if (key === 'Escape') this.view.animator.skip();
       return key === 'Escape';
     }
+    if (this.menu.isOpen) {
+      if (key === 'Escape') this.menu.close();
+      return key === 'Escape';
+    }
     switch (key) {
+      case 'm':
+      case 'M':
+        this.openMenu();
+        return true;
       case 'n':
       case 'N':
       case ' ':

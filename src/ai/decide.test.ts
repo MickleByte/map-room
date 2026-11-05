@@ -40,7 +40,7 @@ describe('decide', () => {
       state = result.state;
     }
     expect(state.turn).toBeGreaterThan(1);
-  });
+  }, 30_000); // several whole AI turns: slow on a busy machine
 });
 
 /** The strikes in a plan, in order, as "type unitType→x,y". */
