@@ -3,7 +3,8 @@
  * are worked out from units and cities on demand; remembered tiles are kept in
  * Player.remembered, which the reducer brings up to date after every action.
  */
-import { indexToCoord, normalize, tileAt, tileIndex, tilesWithin } from './grid';
+import { current, isDraft } from 'immer';
+import { normalize, tileAt, tileIndex, tilesWithin } from './grid';
 import { cityAt, typeOf, unitsAt } from './state';
 import type { City, Coord, GameState, Player, PlayerId, RememberedTile, Unit } from './types';
 
@@ -31,10 +32,15 @@ export function visibleTiles(state: GameState, player: PlayerId): Set<number> {
   return seen;
 }
 
-/** What a player notes about a tile they can see. */
-function snapshot(state: GameState, c: Coord): RememberedTile {
-  const city = cityAt(state, c);
+/** What a player notes about a tile they can see, given the cities by tile index. */
+function snapshot(cities: Map<number, City>, i: number): RememberedTile {
+  const city = cities.get(i);
   return { city: city ? { id: city.id, owner: city.owner, size: city.size, walls: city.walls } : null };
+}
+
+/** The cities by tile index: looked up once per update rather than once per tile. */
+function citiesByTile(state: GameState): Map<number, City> {
+  return new Map(Object.values(state.cities).map((c) => [tileIndex(state.map, c.pos), c]));
 }
 
 function sameMemory(a: RememberedTile | null, b: RememberedTile): boolean {
@@ -48,16 +54,27 @@ function sameMemory(a: RememberedTile | null, b: RememberedTile): boolean {
   );
 }
 
-function remember(state: GameState, player: Player, tiles: Iterable<number>): void {
+function remember(
+  state: GameState,
+  player: Player,
+  tiles: Iterable<number>,
+  cities: Map<number, City> = citiesByTile(state),
+): void {
+  // Read the old notes from the plain array where possible: reading through an Immer
+  // draft makes a proxy for every note touched, and this runs over every visible tile.
+  const notes = isDraft(player.remembered)
+    ? (current(player.remembered) as typeof player.remembered)
+    : player.remembered;
   for (const i of tiles) {
-    const note = snapshot(state, indexToCoord(state.map, i));
-    if (!sameMemory(player.remembered[i] ?? null, note)) player.remembered[i] = note;
+    const note = snapshot(cities, i);
+    if (!sameMemory(notes[i] ?? null, note)) player.remembered[i] = note;
   }
 }
 
 /** Record what every player can see right now. Mutates a draft state. */
 export function updateMemory(state: GameState): void {
-  for (const player of state.players) remember(state, player, visibleTiles(state, player.id));
+  const cities = citiesByTile(state);
+  for (const player of state.players) remember(state, player, visibleTiles(state, player.id), cities);
 }
 
 /**

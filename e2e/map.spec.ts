@@ -9,7 +9,7 @@ interface DebugHook {
 async function boot(page: Page): Promise<void> {
   const errors: string[] = [];
   page.on('pageerror', (err) => errors.push(err.message));
-  await page.goto('/');
+  await page.goto('/?scenario=sandbox');
   await page.waitForFunction(() => '__mapRoom' in window);
   expect(errors).toEqual([]);
 }

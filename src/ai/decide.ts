@@ -18,12 +18,14 @@ import {
   type AirBase,
 } from '../core/combat/air';
 import { bombardRange, hasBombard, previewBombard } from '../core/combat/bombard';
+import { winChance } from '../core/combat/odds';
 import { previewAttack } from '../core/combat/resolve';
-import { coordsEqual, distance, neighbours } from '../core/grid';
-import { findPath } from '../core/movement';
+import { distance, indexToCoord, neighbours, tileAt, tilesWithin } from '../core/grid';
+import { cannotEnter, findPath } from '../core/movement';
 import { cannotBuild } from '../core/cities';
 import { applyAction } from '../core/reducer';
-import { currentPlayer, hasEnemyUnits, typeOf, unitsOf } from '../core/state';
+import { maxHp, THIRDS_PER_MP } from '../core/ruleset';
+import { Board, cargoOf, currentPlayer, hasEnemyUnits, typeOf, unitsAt, unitsOf } from '../core/state';
 import type { Action, City, Coord, GameState, PlayerId, Unit, UnitId, UnitTypeId } from '../core/types';
 import {
   canStrike,
@@ -35,6 +37,7 @@ import {
   threatTo,
   type Role,
 } from './evaluate';
+import { travelField, type Field } from './fields';
 
 export interface AiOptions {
   /** The lowest chance of winning a combat for which the AI attacks. */
@@ -122,6 +125,12 @@ function garrison(plan: Plan): void {
       walk(plan, helper, city.pos);
     }
   }
+  // Defenders standing in a fortress hold it.
+  for (const unit of plan.units()) {
+    const def = typeOf(plan.state, unit);
+    if (def.domain === 'land' && roleOf(def) === 'defender' && tileAt(plan.state.map, unit.pos).fortress)
+      plan.reserved.add(unit.id);
+  }
 }
 
 /** The strongest free defender that can reach a city this turn (the nearest on a tie). */
@@ -173,6 +182,8 @@ function bombard(plan: Plan): void {
   for (const gun of plan.units()) {
     const unit = plan.state.units[gun.id];
     if (!unit || !hasBombard(typeOf(plan.state, unit))) continue;
+    // Bombarding uses up all movement: a warship that can win a fight attacks instead.
+    if (bestAttack(plan, unit)) continue;
     let best: { target: Coord; score: number } | null = null;
     for (const target of bombardRange(plan.state, unit)) {
       const preview = previewBombard(plan.state, unit, target);
@@ -257,28 +268,145 @@ function rebaseToward(plan: Plan, unit: Unit, goals: Coord[]): boolean {
   return !!best && plan.do({ type: 'rebase', unitId: unit.id, to: best.to });
 }
 
+/** How near an enemy city (in thirds of a move) a shore must be for troops to land on it. */
+const LANDING_REACH = 4 * THIRDS_PER_MP;
+
 /**
- * Land units not holding a city head for the nearest enemy city: into it if it is
- * empty, otherwise to the tile beside it that is quickest to reach. Guns stop once
- * the city is within their bombard range. Paratroopers drop into empty enemy cities
- * in reach.
+ * Everything not holding a city or a fortress moves on the enemy, each by walking
+ * downhill on a travel field (see fields.ts) until its movement runs out or the way
+ * on is blocked by enemies, which the attack phase that follows deals with.
+ *
+ * - Warships close on enemy ships at sea they would beat.
+ * - Loaded transports sail for a shore near an enemy city, and their troops land
+ *   there; troops stay aboard beside any other shore.
+ * - Land units head for the enemy city nearest by travel time. Guns stop once an
+ *   enemy is within their bombard range, and never step up to the enemy unescorted.
+ *   Paratroopers drop into empty enemy cities in reach.
  */
 function advance(plan: Plan): void {
+  const goals = Object.values(plan.state.cities)
+    .filter((c) => c.owner !== plan.player)
+    .map((c) => c.pos);
+  const ships = plan.units().filter((u) => typeOf(plan.state, u).domain === 'sea');
+  for (const ship of ships) hunt(plan, ship);
+  const landUnit = plan.units().find((u) => typeOf(plan.state, u).domain === 'land');
+  if (!goals.length || !landUnit) return;
+  const land = travelField(plan.state, landUnit, goals);
+  const landsHere = (c: Coord) => land.cost(c) <= LANDING_REACH;
+
+  for (const ship of ships) {
+    const unit = plan.state.units[ship.id];
+    if (!unit || !cargoOf(plan.state, unit.id).some((c) => typeOf(plan.state, c).domain === 'land')) continue;
+    // Shores near an enemy city, where the troops aboard could step ashore.
+    const landings = Object.values(plan.state.map.tiles).flatMap((_, i) => {
+      const c = indexToCoord(plan.state.map, i);
+      const shore = (n: Coord) => landsHere(n) && !hasEnemyUnits(plan.state, n, plan.player);
+      return !isLand(plan.state, c) && neighbours(plan.state.map, c).some(shore) ? [c] : [];
+    });
+    if (landings.length) descend(plan, unit, travelField(plan.state, unit, landings));
+  }
+
+  const homes = plan.cities().map((c) => c.pos);
+  const home = homes.length ? travelField(plan.state, landUnit, homes) : null;
+
   for (const { id } of plan.units()) {
     const unit = plan.state.units[id];
-    if (!unit || plan.reserved.has(id) || unit.carriedBy !== null || unit.movesLeft <= 0) continue;
+    if (!unit || plan.reserved.has(id) || unit.movesLeft <= 0) continue;
     const def = typeOf(plan.state, unit);
     if (def.domain !== 'land') continue;
-    if (paradrop(plan, unit)) continue;
-    const stopAt = def.attack > 0 ? 0 : def.bombardRange;
-    for (const goal of enemyCitiesByDistance(plan, unit.pos)) {
-      if (distance(plan.state.map, unit.pos, goal.pos) <= stopAt) break;
-      const dest = approach(plan, unit, goal);
-      if (!dest) continue;
-      walk(plan, unit, dest, (u) => distance(plan.state.map, u.pos, goal.pos) <= stopAt);
-      break;
+    const aboard = unit.carriedBy !== null;
+    if (home && !aboard && def.attack > 0 && hurt(plan, unit)) {
+      // Back to the nearest friendly city, which heals it fully, and stay until healed.
+      if (home.cost(unit.pos) > 0) descend(plan, unit, home);
+      continue;
     }
+    if (paradrop(plan, unit)) continue;
+    if (def.attack > 0 || !hasBombard(def)) {
+      descend(plan, unit, land, { mayStep: (_, to) => !aboard || landsHere(to) });
+      continue;
+    }
+    descend(plan, unit, land, {
+      done: (u) => enemyWithin(plan, u.pos, def.bombardRange),
+      mayStep: (board, to) =>
+        (!aboard || landsHere(to)) &&
+        (garrisonAt(plan, board, to) ||
+          !neighbours(plan.state.map, to).some((n) => board.hasEnemy(n, plan.player))),
+    });
   }
+}
+
+/** A warship goes after the nearest enemy ship at sea that it would probably beat. */
+function hunt(plan: Plan, { id }: Unit): void {
+  const ship = plan.state.units[id];
+  if (!ship) return;
+  const def = typeOf(plan.state, ship);
+  if (def.attack <= 0 || ship.movesLeft <= 0 || plan.reserved.has(ship.id)) return;
+  const prey = Object.values(plan.state.units).filter((u) => {
+    const prey = typeOf(plan.state, u);
+    return (
+      u.owner !== plan.player &&
+      u.carriedBy === null &&
+      prey.domain === 'sea' &&
+      !isLand(plan.state, u.pos) &&
+      winChance(def.attack, prey.defence, ship.hp, u.hp) >= plan.options.attackOdds
+    );
+  });
+  const targets = prey.map((u) => u.pos);
+  if (targets.length) descend(plan, ship, travelField(plan.state, ship, targets));
+}
+
+/**
+ * Walk a unit downhill on a field while it has movement left, one step at a time.
+ * Steps into enemies are left to the attack phase; `mayStep` can rule out others,
+ * and `done` stops the walk early.
+ */
+function descend(
+  plan: Plan,
+  unit: Unit,
+  field: Field,
+  rules: { done?: (u: Unit) => boolean; mayStep?: (board: Board, to: Coord) => boolean } = {},
+): void {
+  for (;;) {
+    const now = plan.state.units[unit.id];
+    if (!now || now.movesLeft <= 0 || rules.done?.(now)) return;
+    const board = new Board(plan.state);
+    const next = field
+      .downhill(now.pos, now, board)
+      .find(
+        (to) =>
+          !board.hasEnemy(to, plan.player) &&
+          (rules.mayStep?.(board, to) ?? true) &&
+          !cannotEnter(plan.state, now, to, board),
+      );
+    if (!next || !plan.do({ type: 'move', unitId: now.id, to: next })) return;
+  }
+}
+
+/**
+ * Whether a unit should be healing before it fights again: down to half its HP or
+ * less, or not yet back to full while it is in a friendly city (where it heals fully).
+ */
+function hurt(plan: Plan, unit: Unit): boolean {
+  const max = maxHp(plan.state.ruleset, unit.veteran);
+  const inCity = new Board(plan.state).cityAt(unit.pos)?.owner === plan.player;
+  return inCity ? unit.hp < max : unit.hp * 2 <= max;
+}
+
+/** Whether an enemy unit or city is within a distance of a tile. */
+function enemyWithin(plan: Plan, c: Coord, range: number): boolean {
+  const board = new Board(plan.state);
+  return tilesWithin(plan.state.map, c, range).some(
+    (t) => board.hasEnemy(t, plan.player) || (board.cityAt(t)?.owner ?? plan.player) !== plan.player,
+  );
+}
+
+/** Whether a friendly unit that can defend stands on a tile. */
+function garrisonAt(plan: Plan, board: Board, c: Coord): boolean {
+  return board.hasOwn(c, plan.player) && unitsAt(plan.state, c).some((u) => isDefender(plan.state, u));
+}
+
+function isLand(state: GameState, c: Coord): boolean {
+  return state.ruleset.terrain[tileAt(state.map, c).terrain]!.domain === 'land';
 }
 
 /** Drop a paratrooper into an empty enemy city it can reach. Returns whether it dropped. */
@@ -288,31 +416,6 @@ function paradrop(plan: Plan, unit: Unit): boolean {
     .filter((c) => c.owner !== plan.player && !cannotParadrop(plan.state, unit, c.pos))
     .sort((a, b) => a.id - b.id)[0];
   return !!target && plan.do({ type: 'paradrop', unitId: unit.id, to: target.pos });
-}
-
-/** Enemy cities, nearest first (oldest first on a tie). */
-function enemyCitiesByDistance(plan: Plan, from: Coord): City[] {
-  const d = (c: City) => distance(plan.state.map, from, c.pos);
-  return Object.values(plan.state.cities)
-    .filter((c) => c.owner !== plan.player)
-    .sort((a, b) => d(a) - d(b) || a.id - b.id);
-}
-
-/** Where a unit should head to go after a city: the city if nobody holds it, else the quickest tile next to it. */
-function approach(plan: Plan, unit: Unit, city: City): Coord | null {
-  if (!hasEnemyUnits(plan.state, city.pos, plan.player))
-    return findPath(plan.state, unit, city.pos) ? city.pos : null;
-  let best: { to: Coord; turns: number; steps: number } | null = null;
-  for (const n of neighbours(plan.state.map, city.pos)) {
-    // Already beside it: stay and wait for a better chance to attack.
-    if (coordsEqual(n, unit.pos)) return unit.pos;
-    const path = findPath(plan.state, unit, n);
-    if (!path) continue;
-    const turns = path.at(-1)?.turn ?? 0;
-    if (!best || turns < best.turns || (turns === best.turns && path.length < best.steps))
-      best = { to: n, turns, steps: path.length };
-  }
-  return best?.to ?? null;
 }
 
 /**
@@ -357,13 +460,21 @@ function attack(plan: Plan): void {
     let best: { unit: Unit; target: Coord; odds: number } | null = null;
     for (const unit of plan.units()) {
       if (plan.reserved.has(unit.id)) continue;
-      for (const target of neighbours(plan.state.map, unit.pos)) {
-        if (!hasEnemyUnits(plan.state, target, plan.player)) continue;
-        const preview = previewAttack(plan.state, unit, target);
-        if (typeof preview === 'string' || preview.odds < plan.options.attackOdds) continue;
-        if (!best || preview.odds > best.odds) best = { unit, target, odds: preview.odds };
-      }
+      const option = bestAttack(plan, unit);
+      if (option && (!best || option.odds > best.odds)) best = { unit, ...option };
     }
     if (!best || !plan.do({ type: 'attack', unitId: best.unit.id, target: best.target })) return;
   }
+}
+
+/** A unit's best attack on a neighbouring tile with at least the threshold odds, if any. */
+function bestAttack(plan: Plan, unit: Unit): { target: Coord; odds: number } | null {
+  let best: { target: Coord; odds: number } | null = null;
+  for (const target of neighbours(plan.state.map, unit.pos)) {
+    if (!hasEnemyUnits(plan.state, target, plan.player)) continue;
+    const preview = previewAttack(plan.state, unit, target);
+    if (typeof preview === 'string' || preview.odds < plan.options.attackOdds) continue;
+    if (!best || preview.odds > best.odds) best = { target, odds: preview.odds };
+  }
+  return best;
 }

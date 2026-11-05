@@ -15,7 +15,7 @@ async function boot(page: Page): Promise<{ errors: string[]; warnings: string[] 
   page.on('console', (msg) => {
     if (msg.type() === 'warning' || msg.type() === 'error') warnings.push(msg.text());
   });
-  await page.goto('/');
+  await page.goto('/?scenario=sandbox');
   await page.waitForFunction(() => '__mapRoom' in window);
   expect(errors).toEqual([]);
   return { errors, warnings };

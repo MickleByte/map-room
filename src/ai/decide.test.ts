@@ -305,3 +305,108 @@ describe('attacking at good odds only', () => {
     expect(strikes(easy, playTurn(easy).actions)[0]).toBe('attack armour→2,2');
   });
 });
+
+describe('fronts, landings and fleets', () => {
+  const only = (state: GameState, type: string) => Object.values(state.units).find((u) => u.type === type)!;
+  // Two shores joined by one row of land: row 2 runs right across, the other rows are sea in the middle.
+  const straits = (width: number, from: number, to: number) =>
+    Array.from({ length: 6 }, (_, y) =>
+      Array.from({ length: width }, (_, x) => (y !== 2 && x >= from && x < to ? 'o' : 'g')).join(''),
+    );
+
+  it('marches toward a city cut off by enemy units, as far as the blockers', () => {
+    const state = makeState({
+      terrain: straits(14, 5, 9),
+      cities: [{ name: 'Far side', owner: 'blue', x: 12, y: 2, size: 3, shieldsPerTurn: 1 }],
+      units: [
+        { type: 'armour', owner: 'red', x: 1, y: 2 },
+        { type: 'infantry', owner: 'blue', x: 6, y: 2, fortified: true },
+      ],
+    });
+    expect(only(playTurn(state).state, 'armour').pos).toEqual({ x: 4, y: 2 });
+  });
+
+  it('holds a fortress with the defenders standing in it', () => {
+    const state = makeState({
+      fortresses: [[3, 2]],
+      cities: [{ name: 'Prize', owner: 'blue', x: 9, y: 2, size: 3, shieldsPerTurn: 1 }],
+      units: [{ type: 'infantry', owner: 'red', x: 3, y: 2, fortified: true }],
+    });
+    expect(only(playTurn(state).state, 'infantry').pos).toEqual({ x: 3, y: 2 });
+  });
+
+  it('lands troops from a transport next to the enemy shore', () => {
+    const state = makeState({
+      terrain: Array.from({ length: 6 }, () => 'oooooogggggg'),
+      cities: [{ name: 'Port', owner: 'blue', x: 9, y: 2, size: 3, shieldsPerTurn: 1 }],
+      units: [{ type: 'transport', owner: 'red', x: 5, y: 2, cargo: [{ type: 'armour' }] }],
+    });
+    const tank = only(playTurn(state).state, 'armour');
+    expect(tank.carriedBy).toBeNull();
+    expect(tank.pos.x).toBeGreaterThanOrEqual(6);
+  });
+
+  it('keeps troops aboard beside a shore far from the enemy, and sails them over', () => {
+    const state = makeState({
+      terrain: Array.from({ length: 6 }, () => 'ggoooooooooooooogggg'),
+      cities: [{ name: 'Port', owner: 'blue', x: 18, y: 2, size: 3, shieldsPerTurn: 1 }],
+      units: [{ type: 'transport', owner: 'red', x: 2, y: 2, cargo: [{ type: 'infantry' }] }],
+    });
+    const after = playTurn(state).state;
+    expect(only(after, 'infantry').carriedBy).toBe(only(after, 'transport').id);
+    expect(only(after, 'transport').pos).toEqual({ x: 7, y: 2 });
+  });
+
+  it('sends warships after enemy ships they can beat', () => {
+    const state = makeState({
+      terrain: Array.from({ length: 6 }, () => 'oooooooooooo'),
+      units: [
+        { type: 'destroyer', owner: 'red', x: 1, y: 2 },
+        { type: 'transport', owner: 'blue', x: 7, y: 2 },
+      ],
+    });
+    expect(strikes(state, playTurn(state).actions)).toEqual(['attack destroyer→7,2']);
+  });
+
+  it('pulls a badly hurt unit back to a friendly city to heal', () => {
+    const state = makeState({
+      width: 14,
+      cities: [
+        { name: 'Home', owner: 'red', x: 1, y: 2, size: 3, shieldsPerTurn: 1 },
+        { name: 'Prize', owner: 'blue', x: 12, y: 2, size: 3, shieldsPerTurn: 1 },
+      ],
+      units: [
+        { type: 'infantry', owner: 'red', x: 1, y: 2 },
+        { type: 'armour', owner: 'red', x: 7, y: 2, hp: 1 },
+      ],
+    });
+    expect(only(playTurn(state).state, 'armour').pos).toEqual({ x: 4, y: 2 });
+  });
+
+  it('keeps a hurt unit in a friendly city until it has healed', () => {
+    const state = makeState({
+      width: 14,
+      cities: [
+        { name: 'Home', owner: 'red', x: 1, y: 2, size: 3, shieldsPerTurn: 1 },
+        { name: 'Prize', owner: 'blue', x: 12, y: 2, size: 3, shieldsPerTurn: 1 },
+      ],
+      units: [
+        // The city's best defender stays anyway; the tank is free to go.
+        { type: 'mechInfantry', owner: 'red', x: 1, y: 2 },
+        { type: 'armour', owner: 'red', x: 1, y: 2, hp: 2 },
+      ],
+    });
+    expect(only(playTurn(state).state, 'armour').pos).toEqual({ x: 1, y: 2 });
+  });
+
+  it('keeps warships clear of enemy ships too strong for them', () => {
+    const state = makeState({
+      terrain: Array.from({ length: 6 }, () => 'oooooooooooo'),
+      units: [
+        { type: 'destroyer', owner: 'red', x: 1, y: 2 },
+        { type: 'battleship', owner: 'blue', x: 7, y: 2 },
+      ],
+    });
+    expect(only(playTurn(state).state, 'destroyer').pos).toEqual({ x: 1, y: 2 });
+  });
+});

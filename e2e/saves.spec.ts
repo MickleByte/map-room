@@ -25,7 +25,7 @@ async function chooseFile(page: Page, name: string, text: string): Promise<void>
 async function boot(page: Page): Promise<string[]> {
   const errors: string[] = [];
   page.on('pageerror', (err) => errors.push(err.message));
-  await page.goto('/');
+  await page.goto('/?scenario=sandbox');
   await page.waitForFunction(() => '__mapRoom' in window);
   return errors;
 }

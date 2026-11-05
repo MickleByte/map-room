@@ -167,7 +167,11 @@ function drawSymbol(g: GraphicsContext, type: string, bx: number, by: number, al
       break;
     case 'radarArtillery':
       g.circle(cx, cy + 2, 2.4).fill({ color: 0xffffff, alpha });
-      g.arc(cx, cy + 2, 6, Math.PI * 1.15, Math.PI * 1.85).stroke(line);
+      // Start the arc where it begins: arc() otherwise draws a line from wherever the
+      // last shape ended, which can be another token across the map.
+      g.moveTo(cx + 6 * Math.cos(Math.PI * 1.15), cy + 2 + 6 * Math.sin(Math.PI * 1.15))
+        .arc(cx, cy + 2, 6, Math.PI * 1.15, Math.PI * 1.85)
+        .stroke(line);
       break;
     case 'paratrooper':
       cross().stroke(line);
