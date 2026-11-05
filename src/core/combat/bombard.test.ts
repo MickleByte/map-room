@@ -75,6 +75,34 @@ describe('who may bombard where', () => {
     expect(bombardedOf(r.events).target).toBe(unitOf(s, 'destroyer').id);
   });
 
+  describe('which unit on the tile is hit', () => {
+    // A blue port at (3,1): its battleship (18) and fighter outclass a gun battery (0)
+    // and infantry (10) on paper, but ships and aircraft never defend land.
+    const port = (units: NonNullable<Parameters<typeof makeState>[0]['units']>) => {
+      const s = makeState({
+        terrain: ['ggggcc', 'ggggcc', 'ggggcc'],
+        cities: [{ name: 'Port', owner: 'blue', x: 3, y: 1, size: 1, shieldsPerTurn: 1 }],
+        units: [{ type: 'artillery', owner: 'red', x: 1, y: 1 }, ...units],
+      });
+      const r = ok(bombard(s, unitOf(s, 'artillery', 'red').id, { x: 3, y: 1 }));
+      return s.units[bombardedOf(r.events).target]!.type;
+    };
+
+    it('is a land unit on a land tile, never a ship or aircraft in port', () => {
+      const ships = [
+        { type: 'battleship', owner: 'blue', x: 3, y: 1 },
+        { type: 'fighter', owner: 'blue', x: 3, y: 1 },
+      ];
+      expect(port([...ships, { type: 'infantry', owner: 'blue', x: 3, y: 1 }])).toBe('infantry');
+      expect(port([...ships, { type: 'artillery', owner: 'blue', x: 3, y: 1 }])).toBe('artillery');
+    });
+
+    it('is a ship or aircraft in port only when no land unit is there', () => {
+      expect(port([{ type: 'battleship', owner: 'blue', x: 3, y: 1 }])).toBe('battleship');
+      expect(port([{ type: 'fighter', owner: 'blue', x: 3, y: 1 }])).toBe('fighter');
+    });
+  });
+
   it('is only for units with a bombard; aircraft bomb on missions instead', () => {
     expect(reason(bombard(state, unitOf(state, 'armour').id, { x: 4, y: 2 }))).toMatch(/cannot bombard/);
     expect(reason(bombard(state, unitOf(state, 'fighter').id, { x: 4, y: 2 }))).toMatch(/missions/);

@@ -1,9 +1,9 @@
 /** Lists the visible stack on the selected tile and offers orders for the selected unit. */
 import { shipFor } from '../core/cargo';
-import { cannotDrop, cannotPatrol } from '../core/combat/air';
+import { cannotDrop, cannotFlyAirSuperiority } from '../core/combat/air';
 import { hasBombard } from '../core/combat/bombard';
 import { fullMoves } from '../core/movement';
-import { maxHp, type UnitTypeDef } from '../core/ruleset';
+import { isAircraft, maxHp, type UnitTypeDef } from '../core/ruleset';
 import { cargoOf, cityAt, currentPlayer, typeOf } from '../core/state';
 import type { Coord, GameState, Unit, UnitId } from '../core/types';
 import type { Vision } from '../core/visibility';
@@ -60,7 +60,7 @@ export class UnitPanel {
       if (port && unit.carriedBy !== null && typeOf(state, unit).domain === 'land') {
         buttons.append(el('button', { textContent: 'Go ashore', onclick: () => this.actions.goAshore() }));
       }
-      if (!cannotPatrol(state, unit)) {
+      if (!cannotFlyAirSuperiority(state, unit)) {
         buttons.append(
           el('button', { textContent: 'Air superiority (A)', onclick: () => this.actions.airSuperiority() }),
         );
@@ -102,15 +102,16 @@ export class UnitPanel {
     const mine = u.owner === currentPlayer(state).id;
     const sortie = u.stance === 'airSuperiority' ? 'Air superiority' : u.actedThisTurn ? 'Flown' : null;
     const status = [
-      mine && def.domain === 'air' ? sortie : null,
+      mine && isAircraft(def) ? sortie : null,
       u.justParadropped ? 'Dropped' : null,
       u.fortified ? 'Fortified' : null,
       u.orders ? 'Go-to' : null,
       cargo ? 'Aboard' : null,
       def.cargo && showHold ? `Cargo ${cargoOf(state, u.id).length}/${def.cargo.capacity}` : null,
     ].filter(Boolean);
-    const moves =
-      def.domain === 'air' ? 'Air' : `${formatMoves(u.movesLeft)}/${formatMoves(fullMoves(state, u))} MP`;
+    const moves = isAircraft(def)
+      ? 'Air'
+      : `${formatMoves(u.movesLeft)}/${formatMoves(fullMoves(state, u))} MP`;
 
     const swatch = el('span', { className: 'swatch' });
     swatch.style.background = owner.colour;
@@ -135,7 +136,7 @@ export class UnitPanel {
 /** How to give the selected unit orders with the mouse. */
 function hint(state: GameState, unit: Unit, dropping: boolean): string {
   const def = typeOf(state, unit);
-  if (def.domain === 'air') return airHint(state, unit);
+  if (isAircraft(def)) return airHint(state, unit);
   if (dropping) return 'Right-click a tile in the green zone to drop there. Esc cancels.';
   if (!cannotDrop(state, unit)) {
     return `${attackHint(def)} Or paradrop (P) up to ${def.paradropRange} tiles from this city.`;
@@ -157,12 +158,12 @@ function airHint(state: GameState, unit: Unit): string {
     return `On air superiority until your next turn: it intercepts the first enemy bomber flying a mission within ${def.operationalRange} tiles.`;
   if (unit.actedThisTurn) return 'This aircraft has flown this turn.';
   const bomb = def.bombardStrength > 0 ? 'an enemy to bomb it, ' : '';
-  const patrol = def.airSuperiority ? ' Or put it on air superiority (A) to guard against bombers.' : '';
-  return `Right-click in the blue range: ${bomb}a friendly city or carrier to rebase there, or any other tile to fly recon.${patrol}`;
+  const guard = def.airSuperiority ? ' Or put it on air superiority (A) to guard against bombers.' : '';
+  return `Right-click in the blue range: ${bomb}a friendly city or carrier to rebase there, or any other tile to fly recon.${guard}`;
 }
 
 function attackHint(def: UnitTypeDef): string {
-  const attacks = def.attack > 0 && def.domain !== 'air';
+  const attacks = def.attack > 0 && !isAircraft(def);
   if (attacks && hasBombard(def))
     return 'Right-click a tile to move there, an adjacent enemy to attack, or an enemy in the red range to bombard.';
   if (hasBombard(def)) return 'Right-click a tile to move there, or an enemy in the red range to bombard.';

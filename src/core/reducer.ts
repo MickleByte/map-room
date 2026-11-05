@@ -7,16 +7,16 @@ import { produce } from 'immer';
 import {
   cannotFlyMission,
   cannotParadrop,
-  cannotPatrol,
+  cannotFlyAirSuperiority,
   cannotRebase,
   resolveMission,
   resolveParadrop,
   resolveRebase,
-  startPatrol,
+  startAirSuperiority,
 } from './combat/air';
 import { cannotBombard, resolveBombard } from './combat/bombard';
 import { cannotAttack, resolveAttack } from './combat/resolve';
-import { cannotCarry } from './cargo';
+import { cannotBoard, resolveBoard } from './cargo';
 import { cannotBuild } from './cities';
 import { coordsEqual, isAdjacent, normalize } from './grid';
 import { cannotEnter, findPath } from './movement';
@@ -108,17 +108,9 @@ const handlers: Handlers = {
   board(state, { unitId, carrierId }) {
     const unit = ownUnit(state, unitId);
     if (typeof unit === 'string') return unit;
-    const ship = state.units[carrierId];
-    if (!ship) return `No unit with id ${carrierId}`;
-    if (!coordsEqual(unit.pos, ship.pos)) return 'The unit and the ship must be on the same tile';
-    if (!cityAt(state, unit.pos)) return 'Units board in a city; at sea, move onto the ship';
-    if (unit.carriedBy !== null) return 'This unit is already aboard a ship';
-    const why = cannotCarry(state, ship, unit);
+    const why = cannotBoard(state, unit, carrierId);
     if (why) return why;
-    unit.carriedBy = ship.id;
-    unit.fortified = false;
-    unit.orders = null;
-    if (typeOf(state, unit).domain === 'air') unit.base = { kind: 'carrier', id: ship.id };
+    resolveBoard(state, unit, carrierId);
   },
   airMission(state, { unitId, mission, target }, events) {
     const unit = ownUnit(state, unitId);
@@ -130,9 +122,9 @@ const handlers: Handlers = {
   airSuperiority(state, { unitId }) {
     const unit = ownUnit(state, unitId);
     if (typeof unit === 'string') return unit;
-    const why = cannotPatrol(state, unit);
+    const why = cannotFlyAirSuperiority(state, unit);
     if (why) return why;
-    startPatrol(unit);
+    startAirSuperiority(unit);
   },
   rebase(state, { unitId, to }, events) {
     const unit = ownUnit(state, unitId);

@@ -4,7 +4,7 @@
  */
 import { cannotBoardAt } from './cargo';
 import { neighbours, tileAt, tileIndex } from './grid';
-import { THIRDS_PER_MP } from './ruleset';
+import { isAircraft, THIRDS_PER_MP } from './ruleset';
 import { Board, typeOf } from './state';
 import type { Coord, GameState, MoveThirds, Unit } from './types';
 
@@ -39,7 +39,7 @@ export function cannotOccupy(
   const terrain = state.ruleset.terrain[tileAt(state.map, to).terrain]!;
   const city = board.cityAt(to);
 
-  if (def.domain === 'air') return 'Aircraft fly missions or rebase; they do not move';
+  if (isAircraft(def)) return 'Aircraft fly missions or rebase; they do not move';
   if (def.domain === 'land' && terrain.domain !== 'land') {
     // Only by boarding a friendly transport. Enemy ships are never boarded, so this
     // also keeps land units from attacking ships at sea (ADR-0003).

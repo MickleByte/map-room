@@ -10,7 +10,8 @@ import { cannotOccupy, fullMoves } from '../movement';
 import { cityAt, hasEnemyUnits, typeOf } from '../state';
 import type { Coord, GameEvent, GameState, PlayerId, Unit } from '../types';
 import { cannotCarry } from '../cargo';
-import { Rng } from '../rng';
+import { withRng } from '../rng';
+import { isAircraft } from '../ruleset';
 import { destroyUnit, placeUnit } from '../units';
 import { bombardTarget, fireShots, type BombardPreview } from './bombard';
 import { roundChance } from './odds';
@@ -20,7 +21,7 @@ export type MissionKind = 'bomb' | 'recon';
 
 /** Why a unit can't fly a sortie (mission, rebase or air superiority) now, or null if it can. */
 export function cannotSortie(state: GameState, unit: Unit): string | null {
-  if (typeOf(state, unit).domain !== 'air') return 'Only aircraft fly missions';
+  if (!isAircraft(typeOf(state, unit))) return 'Only aircraft fly missions';
   if (unit.actedThisTurn) return 'This aircraft has already flown this turn';
   return null;
 }
@@ -173,7 +174,7 @@ export function paradropRange(state: GameState, unit: Unit): Coord[] {
 }
 
 /** Why a unit may not go on air superiority, or null if it may. */
-export function cannotPatrol(state: GameState, unit: Unit): string | null {
+export function cannotFlyAirSuperiority(state: GameState, unit: Unit): string | null {
   const why = cannotSortie(state, unit);
   if (why) return why;
   const def = typeOf(state, unit);
@@ -182,7 +183,7 @@ export function cannotPatrol(state: GameState, unit: Unit): string | null {
 }
 
 /** Put a fighter on air superiority until its owner's next turn. Mutates a draft state. */
-export function startPatrol(unit: Unit): void {
+export function startAirSuperiority(unit: Unit): void {
   unit.actedThisTurn = true;
   unit.stance = 'airSuperiority';
 }
@@ -190,7 +191,7 @@ export function startPatrol(unit: Unit): void {
 /** Bombers are the aircraft that can't fly air superiority themselves. */
 function isBomber(state: GameState, unit: Unit): boolean {
   const def = typeOf(state, unit);
-  return def.domain === 'air' && !def.airSuperiority;
+  return isAircraft(def) && !def.airSuperiority;
 }
 
 /**
@@ -219,9 +220,7 @@ export function interceptorsOf(state: GameState, unit: Unit, target: Coord): Uni
 function intercept(state: GameState, fighter: Unit, bomber: Unit, events: GameEvent[]): void {
   fighter.interceptsLeft--;
   const p = roundChance(typeOf(state, fighter).attack, typeOf(state, bomber).defence);
-  const rng = new Rng(state.rng);
-  const rounds = combatRounds(fighter, bomber, p, rng);
-  state.rng = rng.state();
+  const rounds = withRng(state, (rng) => combatRounds(fighter, bomber, p, rng));
   const [winner, loser] = fighter.hp > 0 ? [fighter, bomber] : [bomber, fighter];
   events.push({ type: 'intercepted', fighter: fighter.id, bomber: bomber.id, rounds, winner: winner.id });
   destroyUnit(state, loser, events);

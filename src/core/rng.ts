@@ -22,8 +22,19 @@ export function seedRng(seed: number): RngState {
 }
 
 /**
- * A mutable cursor over an RngState. Create one from the game state at the start
- * of an action, draw from it, then write `state()` back.
+ * Draw from a game's RNG: `draw` gets a cursor over its state, which is written back
+ * afterwards. Mutates a draft state.
+ */
+export function withRng<T>(game: { rng: RngState }, draw: (rng: Rng) => T): T {
+  const rng = new Rng(game.rng);
+  const result = draw(rng);
+  game.rng = rng.state();
+  return result;
+}
+
+/**
+ * A mutable cursor over an RngState. Rules draw through withRng, which writes the
+ * new state back to the game.
  */
 export class Rng {
   private a: number;

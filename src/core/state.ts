@@ -1,7 +1,7 @@
 /** Read-only lookups over GameState shared by core, AI and UI. */
 import { coordsEqual } from './grid';
 import { unitType, type UnitTypeDef } from './ruleset';
-import type { City, Coord, GameState, Player, Unit, UnitId } from './types';
+import type { City, Coord, GameState, Player, PlayerId, Unit, UnitId } from './types';
 
 export function currentPlayer(state: GameState): Player {
   return state.players[state.currentPlayer]!;
@@ -24,11 +24,11 @@ export function cargoOf(state: GameState, carrierId: UnitId): Unit[] {
   return Object.values(state.units).filter((u) => u.carriedBy === carrierId);
 }
 
-export function hasEnemyUnits(state: GameState, c: Coord, player: string): boolean {
+export function hasEnemyUnits(state: GameState, c: Coord, player: PlayerId): boolean {
   return unitsAt(state, c).some((u) => u.owner !== player);
 }
 
-export function unitsOf(state: GameState, player: string): Unit[] {
+export function unitsOf(state: GameState, player: PlayerId): Unit[] {
   return Object.values(state.units).filter((u) => u.owner === player);
 }
 
@@ -38,7 +38,7 @@ export function unitsOf(state: GameState, player: string): Unit[] {
  */
 export class Board {
   private readonly cities = new Map<number, City>();
-  private readonly owners = new Map<number, Set<string>>();
+  private readonly owners = new Map<number, Set<PlayerId>>();
 
   constructor(readonly state: GameState) {
     const key = (c: Coord) => c.y * state.map.width + c.x;
@@ -55,11 +55,11 @@ export class Board {
     return this.cities.get(c.y * this.state.map.width + c.x);
   }
 
-  hasOwn(c: Coord, player: string): boolean {
+  hasOwn(c: Coord, player: PlayerId): boolean {
     return !!this.owners.get(c.y * this.state.map.width + c.x)?.has(player);
   }
 
-  hasEnemy(c: Coord, player: string): boolean {
+  hasEnemy(c: Coord, player: PlayerId): boolean {
     const set = this.owners.get(c.y * this.state.map.width + c.x);
     return !!set && [...set].some((o) => o !== player);
   }

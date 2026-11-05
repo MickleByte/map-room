@@ -3,6 +3,9 @@ import { defineConfig, devices } from '@playwright/test';
 export default defineConfig({
   testDir: './e2e',
   outputDir: './e2e/.results',
+  // Each worker runs a browser drawing the whole map; at Playwright's default (half the
+  // cores) the dev server and GPU are swamped and tests that pass alone time out.
+  workers: 4,
   use: {
     baseURL: 'http://localhost:5199',
     viewport: { width: 1280, height: 800 },

@@ -57,7 +57,8 @@ export function newGame(json: unknown): Game {
   return { scenario: parsed.data, initialState: state, actions: [], state };
 }
 
-export function createSave(game: Game, name: string, savedAt: string): SaveFile {
+/** A save of a game as it stands, stamped with the current time unless `savedAt` is given. */
+export function createSave(game: Game, name: string, savedAt = new Date().toISOString()): SaveFile {
   return {
     schemaVersion: SCHEMA_VERSION,
     name,

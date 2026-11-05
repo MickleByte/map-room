@@ -6,7 +6,7 @@
  */
 import { Container, GraphicsContext, Text } from 'pixi.js';
 import { tileIndex } from '../core/grid';
-import { maxHp } from '../core/ruleset';
+import { isAircraft, maxHp } from '../core/ruleset';
 import { cargoOf, cityAt, currentPlayer, typeOf } from '../core/state';
 import type { GameState, Unit, UnitId } from '../core/types';
 import type { Vision } from '../core/visibility';
@@ -42,7 +42,7 @@ export function topUnit(state: GameState, units: Unit[], selected: UnitId | null
   if (chosen) return chosen;
   const score = (u: Unit) => {
     const def = typeOf(state, u);
-    return (def.domain === 'air' ? -1000 : 0) + def.defence * 10 + def.attack;
+    return (isAircraft(def) ? -1000 : 0) + def.defence * 10 + def.attack;
   };
   return [...units].sort((a, b) => score(b) - score(a) || a.id - b.id)[0]!;
 }

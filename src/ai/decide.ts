@@ -10,7 +10,7 @@
 import {
   cannotDrop,
   cannotParadrop,
-  cannotPatrol,
+  cannotFlyAirSuperiority,
   cannotSortie,
   missionRange,
   previewMission,
@@ -24,7 +24,7 @@ import { distance, indexToCoord, neighbours, tileAt, tilesWithin } from '../core
 import { cannotEnter, findPath } from '../core/movement';
 import { cannotBuild } from '../core/cities';
 import { applyAction } from '../core/reducer';
-import { maxHp, THIRDS_PER_MP } from '../core/ruleset';
+import { isAircraft, maxHp, THIRDS_PER_MP } from '../core/ruleset';
 import { Board, cargoOf, currentPlayer, hasEnemyUnits, typeOf, unitsAt, unitsOf } from '../core/state';
 import type { Action, City, Coord, GameState, PlayerId, Unit, UnitId, UnitTypeId } from '../core/types';
 import {
@@ -57,7 +57,7 @@ export function decide(state: GameState, player: PlayerId, options: Partial<AiOp
   advance(plan);
   bombard(plan);
   attack(plan);
-  patrol(plan);
+  flyAirSuperiority(plan);
   fortifyGarrisons(plan);
   produce(plan);
   plan.do({ type: 'endTurn' });
@@ -207,7 +207,7 @@ function bomb(plan: Plan): void {
     const unit = plan.state.units[id];
     if (!unit) continue;
     const def = typeOf(plan.state, unit);
-    if (def.domain !== 'air' || def.airSuperiority || cannotSortie(plan.state, unit)) continue;
+    if (!isAircraft(def) || def.airSuperiority || cannotSortie(plan.state, unit)) continue;
     let best: { target: Coord; score: number } | null = null;
     for (const target of missionRange(plan.state, unit)) {
       if (!hasEnemyUnits(plan.state, target, plan.player)) continue;
@@ -234,11 +234,11 @@ function bomb(plan: Plan): void {
  * Fighters fly air superiority, which covers their operational range through the
  * enemy's turn. A fighter too far from every threatened city rebases closer instead.
  */
-function patrol(plan: Plan): void {
+function flyAirSuperiority(plan: Plan): void {
   const threatened = plan.cities().filter((c) => threatTo(plan.state, c) !== null);
   for (const { id } of plan.units()) {
     const unit = plan.state.units[id];
-    if (!unit || cannotPatrol(plan.state, unit)) continue;
+    if (!unit || cannotFlyAirSuperiority(plan.state, unit)) continue;
     const range = typeOf(plan.state, unit).operationalRange;
     const covered = threatened.some((c) => distance(plan.state.map, unit.pos, c.pos) <= range);
     if (

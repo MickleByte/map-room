@@ -100,6 +100,7 @@ export function fogViewer(state: GameState): PlayerId | null {
 export class Vision {
   private readonly visible: Set<number> | null;
   private readonly memory: (RememberedTile | null)[];
+  private known: GameState | null = null;
 
   constructor(
     readonly state: GameState,
@@ -132,6 +133,24 @@ export class Vision {
   /** Every city the player knows about, as they know it. */
   cities(): City[] {
     return Object.values(this.state.cities).flatMap((c) => this.cityAt(c.pos) ?? []);
+  }
+
+  /**
+   * The game as the player knows it, for the previews and checks shown to them (drop
+   * zones, routes, odds): only units on visible tiles, and cities as last seen. The
+   * reducer and the AI use the true state.
+   */
+  knownState(): GameState {
+    if (!this.visible) return this.state;
+    if (!this.known) {
+      const units = Object.values(this.state.units).filter((u) => this.at(u.pos) === 'visible');
+      this.known = {
+        ...this.state,
+        units: Object.fromEntries(units.map((u) => [u.id, u])),
+        cities: Object.fromEntries(this.cities().map((c) => [c.id, c])),
+      };
+    }
+    return this.known;
   }
 
   private index(c: Coord): number {

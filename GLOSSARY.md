@@ -150,11 +150,15 @@ _Avoid_: Airfield, home
 **Operational range**:
 How far from its base an aircraft can fly a mission.
 
+**Sortie**:
+An aircraft's one air action per turn: a mission, a rebase or air superiority.
+_Avoid_: Flight, air move
+
 **Mission**:
-A round trip by an aircraft from its base: a bombing run, recon, or air superiority.
+A round trip by an aircraft from its base to a tile in operational range: a bombing run or recon.
 
 **Air superiority**:
-A fighter mission, set up during its owner's turn, in which it waits to intercept enemy bombers on the enemy's turn.
+A fighter's sortie, set up during its owner's turn, in which it waits at its base to intercept enemy bombers on the enemy's turn.
 _Avoid_: Patrol, CAP
 
 **Interception**:

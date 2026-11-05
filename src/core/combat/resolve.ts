@@ -5,7 +5,8 @@
  */
 import { isAdjacent, normalize } from '../grid';
 import { cannotOccupy } from '../movement';
-import { Rng } from '../rng';
+import { withRng, type Rng } from '../rng';
+import { isAircraft } from '../ruleset';
 import { hasEnemyUnits, typeOf, unitsAt } from '../state';
 import type { CombatRound, Coord, GameEvent, GameState, Unit } from '../types';
 import { destroyUnit, placeUnit } from '../units';
@@ -17,7 +18,7 @@ export function cannotAttack(state: GameState, unit: Unit, target: Coord): strin
   const to = normalize(state.map, target);
   if (!to) return 'That tile is off the map';
   const def = typeOf(state, unit);
-  if (def.domain === 'air') return 'Aircraft fly missions; they do not attack';
+  if (isAircraft(def)) return 'Aircraft fly missions; they do not attack';
   if (def.attack <= 0) return 'This unit cannot attack';
   if (unit.carriedBy !== null) return 'Units cannot attack from aboard a ship';
   if (!isAdjacent(state.map, unit.pos, to)) return 'Units can only attack an adjacent tile';
@@ -108,9 +109,7 @@ export function resolveAttack(state: GameState, attacker: Unit, target: Coord, e
 
   const defender = bestDefender(state, attacker, target);
   if (defender) {
-    const rng = new Rng(state.rng);
-    const won = fight(state, attacker, defender, rng, events);
-    state.rng = rng.state();
+    const won = withRng(state, (rng) => fight(state, attacker, defender, rng, events));
     if (!won || defendersAt(state, attacker, target).length) return;
   }
   advance(state, attacker, target, events);

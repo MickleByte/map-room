@@ -5,7 +5,8 @@
  */
 import type { GraphicsContext } from 'pixi.js';
 import type { Effect } from './effects';
-import { diamond, TILE_W, tileCentre, type Point } from './iso';
+import type { GameMap } from '../core/types';
+import { diamond, tileCentre, tileCentreFrom, type Point } from './iso';
 
 export type AnimationSpeed = 'slow' | 'normal' | 'fast';
 
@@ -17,7 +18,10 @@ export class Animator {
   private skipping = false;
   private finish: (() => void) | null = null;
 
-  constructor(private readonly ctx: GraphicsContext) {}
+  constructor(
+    private readonly ctx: GraphicsContext,
+    private readonly map: GameMap,
+  ) {}
 
   get skipped(): boolean {
     return this.skipping;
@@ -57,7 +61,7 @@ export class Animator {
       const tick = (now: number) => {
         const t = Math.min(1, (now - start) / duration);
         this.ctx.clear();
-        draw(this.ctx, effect, t);
+        draw(this.ctx, this.map, effect, t);
         if (t >= 1) done();
         else frame = requestAnimationFrame(tick);
       };
@@ -73,14 +77,14 @@ const lerp = (a: Point, b: Point, t: number): Point => ({
 const hex = (colour: string) => parseInt(colour.slice(1), 16);
 
 /** One frame of an effect, t running from 0 to 1. */
-function draw(ctx: GraphicsContext, effect: Effect, t: number): void {
+function draw(ctx: GraphicsContext, map: GameMap, effect: Effect, t: number): void {
   switch (effect.kind) {
     case 'move': {
+      // Across the wrap seam the step runs off one edge and in at the other.
       const a = tileCentre(effect.from);
-      const b = tileCentre(effect.to);
-      // A step across the wrap seam would sweep across the whole map: just show the arrival.
-      const p = Math.abs(b.x - a.x) > TILE_W ? b : lerp(a, b, t);
-      if (p !== b) ctx.moveTo(a.x, a.y).lineTo(p.x, p.y).stroke({ width: 3, color: 0x000000, alpha: 0.35 });
+      const b = tileCentreFrom(map, effect.from, effect.to);
+      const p = lerp(a, b, t);
+      ctx.moveTo(a.x, a.y).lineTo(p.x, p.y).stroke({ width: 3, color: 0x000000, alpha: 0.35 });
       ctx
         .circle(p.x, p.y - 8, 7)
         .fill({ color: hex(effect.colour) })
@@ -89,13 +93,12 @@ function draw(ctx: GraphicsContext, effect: Effect, t: number): void {
     }
     case 'strike': {
       const a = tileCentre(effect.from);
-      const b = tileCentre(effect.to);
-      const seam = Math.abs(b.x - a.x) > TILE_W * 4;
+      const b = tileCentreFrom(map, effect.from, effect.to);
       // Mark the shooter in its colour and the target in red throughout.
       ctx.poly(diamond(a, 2)).stroke({ width: 2.5, color: hex(effect.colour) });
       ctx.poly(diamond(b, 2)).stroke({ width: 3, color: 0xe0533f });
       // The shot flies for the first half, then bursts on the target.
-      if (!seam && t < 0.5) {
+      if (t < 0.5) {
         const p = lerp(a, b, t * 2);
         ctx
           .moveTo(a.x, a.y - 10)
@@ -106,7 +109,7 @@ function draw(ctx: GraphicsContext, effect: Effect, t: number): void {
           .fill({ color: 0xffd166 })
           .stroke({ width: 1.5, color: 0x111111 });
       } else {
-        const burst = seam ? t : (t - 0.5) * 2;
+        const burst = (t - 0.5) * 2;
         ctx.circle(b.x, b.y - 10, 10 + burst * 18).fill({ color: 0xff8c42, alpha: 0.85 * (1 - burst) });
         ctx.circle(b.x, b.y - 10, 6 + burst * 10).fill({ color: 0xfff2b0, alpha: 1 - burst });
       }

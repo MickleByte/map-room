@@ -164,19 +164,19 @@ describe('air superiority and interception', () => {
   const scout = unitOf(base, 'fighter', 'blue');
   const covered = { x: 6, y: 2 };
   const uncovered = { x: 10, y: 2 };
-  const patrol: Action = { type: 'airSuperiority', unitId: fighter.id };
+  const superiority: Action = { type: 'airSuperiority', unitId: fighter.id };
 
   /** Red puts the fighter up, then it's Blue's turn. */
-  const onPatrol = (state: GameState) => ok(applyActions(state, [patrol, endTurn])).state;
-  const fighterWins = onPatrol(retype(base, 'bomber', { defence: 0 }));
-  const bomberWins = onPatrol(retype(base, 'fighter', { attack: 0 }));
+  const onAirSuperiority = (state: GameState) => ok(applyActions(state, [superiority, endTurn])).state;
+  const fighterWins = onAirSuperiority(retype(base, 'bomber', { defence: 0 }));
+  const bomberWins = onAirSuperiority(retype(base, 'fighter', { attack: 0 }));
   const intercepts = (state: GameState, unitId: number, kind: 'bomb' | 'recon', target: Coord) =>
     ofType(ok(mission(state, unitId, kind, target)).events, 'intercepted').length;
 
   it('is a stance only fighters can take, and uses their sortie', () => {
-    const { state } = ok(applyAction(base, patrol));
+    const { state } = ok(applyAction(base, superiority));
     expect(state.units[fighter.id]!.stance).toBe('airSuperiority');
-    expect(reason(applyAction(state, patrol))).toMatch(/already flown/);
+    expect(reason(applyAction(state, superiority))).toMatch(/already flown/);
     expect(reason(mission(state, fighter.id, 'recon', covered))).toMatch(/already flown/);
     const blueTurn = ok(applyAction(base, endTurn)).state;
     expect(reason(applyAction(blueTurn, { type: 'airSuperiority', unitId: b1!.id }))).toMatch(
@@ -241,7 +241,7 @@ describe('air superiority and interception', () => {
 
   it('intercepts again on the next enemy turn if put back on air superiority', () => {
     const first = ok(mission(fighterWins, b1!.id, 'recon', covered)).state;
-    const again = ok(applyActions(first, [endTurn, patrol, endTurn])).state;
+    const again = ok(applyActions(first, [endTurn, superiority, endTurn])).state;
     expect(intercepts(again, b2!.id, 'bomb', covered)).toBe(1);
   });
 

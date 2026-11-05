@@ -49,6 +49,71 @@ test('the enemy’s side of the map starts unseen', async ({ page }) => {
   await page.screenshot({ path: 'e2e/.results/fog-start.png' });
 });
 
+test('previews know nothing of enemies out of sight; the rules still do', async ({ page }) => {
+  await boot(page);
+  // Plant a blue infantry on land out of red's sight, within paradrop range of
+  // Brindle (7,22) and reachable by the red tank at (7,20).
+  const planted = await page.evaluate(async () => {
+    const load = (path: string) => import(/* @vite-ignore */ path);
+    const grid = (await load('/src/core/grid.ts')) as typeof import('../src/core/grid');
+    const movement = (await load('/src/core/movement.ts')) as typeof import('../src/core/movement');
+    const h = (window as unknown as { __mapRoom: Hook & { refresh(): void } }).__mapRoom;
+    const state = structuredClone(h.state);
+    const units = Object.values(state.units);
+    const tank = units.find(
+      (u) => u.type === 'armour' && u.owner === 'red' && u.pos.x === 7 && u.pos.y === 20,
+    )!;
+    const blue = units.find((u) => u.type === 'infantry' && u.owner === 'blue')!;
+    const brindle = { x: 7, y: 22 };
+    const to = grid
+      .tilesWithin(state.map, brindle, 6)
+      .find(
+        (c) =>
+          h.vision.at(c) === 'unseen' &&
+          state.ruleset.terrain[grid.tileAt(state.map, c).terrain]!.domain === 'land' &&
+          !units.some((u) => grid.coordsEqual(u.pos, c)) &&
+          movement.findPath(state, tank, c),
+      )!;
+    blue.pos = to;
+    h.state = state;
+    h.refresh();
+    return { to, tank: tank.id, para: units.find((u) => u.type === 'paratrooper' && u.owner === 'red')!.id };
+  });
+  const point = (c: Coord) =>
+    page.evaluate((c) => {
+      const h = (window as unknown as { __mapRoom: Hook }).__mapRoom;
+      h.centreOnTile(c);
+      const { camera } = h;
+      return {
+        x: ((2 * c.x + (c.y & 1) + 1) * 32 - camera.centre.x) * camera.zoom + window.innerWidth / 2,
+        y: ((c.y + 1) * 16 - camera.centre.y) * camera.zoom + window.innerHeight / 2,
+      };
+    }, c);
+
+  // The tank's route preview plans a way there, as to any empty tile.
+  await page.evaluate(
+    (id) => (window as unknown as { __mapRoom: Hook }).__mapRoom.selectUnit(id),
+    planted.tank,
+  );
+  let p = await point(planted.to);
+  await page.mouse.move(p.x, p.y);
+  await expect(page.locator('.path-tip')).toHaveText(/^(This turn|\d+ turns)$/);
+
+  // The paratrooper's drop zone includes the tile; the drop itself is refused.
+  await page.evaluate(
+    (id) => (window as unknown as { __mapRoom: Hook }).__mapRoom.selectUnit(id),
+    planted.para,
+  );
+  await page.keyboard.press('p');
+  p = await point(planted.to);
+  await page.mouse.move(p.x + 1, p.y);
+  await page.mouse.move(p.x, p.y);
+  await expect(page.locator('.path-tip')).toHaveText('Paradrop here');
+  await page.screenshot({ path: 'e2e/.results/fog-hidden-drop.png' });
+  await page.mouse.click(p.x, p.y, { button: 'right' });
+  await expect(page.locator('.toast')).toHaveText('Paratroopers cannot drop onto enemy units');
+});
+
 test('tiles stay remembered, without units, after a unit drives away', async ({ page }) => {
   await boot(page);
   const remembered = await page.evaluate(async () => {

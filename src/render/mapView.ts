@@ -30,13 +30,14 @@ export class MapView {
   private readonly range = new GraphicsContext();
   private readonly effects = new GraphicsContext();
   /** Plays the AI's moves and strikes over the map. */
-  readonly animator = new Animator(this.effects);
+  readonly animator: Animator;
   private unitShapes = new GraphicsContext();
 
   constructor(
     state: GameState,
     private readonly camera: Camera,
   ) {
+    this.animator = new Animator(this.effects, state.map);
     const terrain = drawMap(state);
     const offsets = state.map.wrapX ? [-1, 0, 1] : [0];
     for (const k of offsets) {

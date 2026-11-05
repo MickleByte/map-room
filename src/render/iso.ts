@@ -2,7 +2,7 @@
  * Tile ↔ world-pixel projection for diamond tiles in staggered rows (ADR-0001).
  * World pixels are unscaled; the camera applies zoom and pan on top.
  */
-import { doubledColumn } from '../core/grid';
+import { delta, doubledColumn } from '../core/grid';
 import type { Coord, GameMap } from '../core/types';
 
 export const TILE_W = 64;
@@ -18,6 +18,15 @@ export interface Point {
 /** Centre of a tile in world pixels. The map's top-left corner is at (0, 0). */
 export function tileCentre(c: Coord): Point {
   return { x: (doubledColumn(c) + 1) * HALF_W, y: (c.y + 1) * HALF_H };
+}
+
+/**
+ * Centre of tile `to` placed the short way round from tile `from`, so a line between
+ * them never sweeps across the whole map. When that way crosses the wrap seam the
+ * point lies just beyond the world's edge, where a neighbouring wrap copy draws it.
+ */
+export function tileCentreFrom(map: GameMap, from: Coord, to: Coord): Point {
+  return { x: tileCentre(from).x + delta(map, from, to).x * HALF_W, y: tileCentre(to).y };
 }
 
 /** Width of one copy of the world; wrap copies repeat at this spacing. */

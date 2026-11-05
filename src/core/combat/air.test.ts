@@ -57,6 +57,25 @@ describe('bombing preview', () => {
   it('gives the reason when the mission is not allowed', () => {
     expect(previewMission(state, unitOf(state, 'bomber'), { x: 5, y: 1 })).toMatch(/no enemy/);
   });
+
+  it('aims at the land defenders of a port, not the ships or aircraft in it', () => {
+    const port = makeState({
+      terrain: ['ggggcc', 'ggggcc', 'ggggcc'],
+      cities: [
+        { name: 'Field', owner: 'red', x: 0, y: 1, size: 3, shieldsPerTurn: 1 },
+        { name: 'Port', owner: 'blue', x: 3, y: 1, size: 1, shieldsPerTurn: 1 },
+      ],
+      units: [
+        { type: 'bomber', owner: 'red', x: 0, y: 1 },
+        { type: 'battleship', owner: 'blue', x: 3, y: 1 },
+        { type: 'fighter', owner: 'blue', x: 3, y: 1 },
+        { type: 'infantry', owner: 'blue', x: 3, y: 1 },
+      ],
+    });
+    const p = previewMission(port, unitOf(port, 'bomber'), { x: 3, y: 1 });
+    if (typeof p === 'string') throw new Error(p);
+    expect(p.target.type).toBe('infantry');
+  });
 });
 
 describe('rebase targets', () => {

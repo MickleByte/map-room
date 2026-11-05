@@ -193,4 +193,17 @@ describe('what a player is shown', () => {
     expect(vision.cityAt({ x: 10, y: 2 })).toBeUndefined();
     expect(vision.cities().map((c) => c.name)).toEqual(['Bluehaven']);
   });
+
+  it('gives the game as the player knows it: units in sight, cities as last seen', () => {
+    const known = new Vision(later, 'red').knownState();
+    expect(Object.values(known.units).map((u) => `${u.owner} ${u.type}`)).toEqual(['red infantry']);
+    expect(Object.values(known.cities)).toEqual([
+      expect.objectContaining({ name: 'Bluehaven', owner: 'blue', size: 3, walls: false }),
+    ]);
+    expect(known.map).toBe(later.map);
+  });
+
+  it('gives the whole game to a viewer who sees everything', () => {
+    expect(new Vision(later, null).knownState()).toBe(later);
+  });
 });

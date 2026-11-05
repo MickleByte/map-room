@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { decide } from '../ai/decide';
 import { applyAction } from '../core/reducer';
 import type { GameState } from '../core/types';
@@ -50,6 +50,15 @@ describe('save files', { timeout: 30_000 }, () => {
     expect(imported.save.actions).toEqual(game.actions);
     expect(imported.save.initialState).toEqual(game.initialState);
     expect(imported.save.state).toEqual(game.state);
+  });
+
+  it('a save is stamped with the time it was made', () => {
+    vi.useFakeTimers({ now: new Date(SAVED_AT) });
+    try {
+      expect(createSave(newGame(sandbox), 'Now').savedAt).toBe(SAVED_AT);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('a new game starts with an empty log from the scenario’s initial state', () => {

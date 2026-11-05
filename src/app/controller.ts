@@ -20,8 +20,9 @@ import { cannotAttack, previewAttack } from '../core/combat/resolve';
 import { coordsEqual, distance, isAdjacent } from '../core/grid';
 import { cannotEnter, findPath } from '../core/movement';
 import { applyAction } from '../core/reducer';
+import { isAircraft } from '../core/ruleset';
 import { cityAt, currentPlayer, typeOf, unitsAt } from '../core/state';
-import type { Action, City, Coord, GameEvent, GameState, Unit, UnitId } from '../core/types';
+import type { Action, ApplyResult, City, Coord, GameEvent, GameState, Unit, UnitId } from '../core/types';
 import { fogViewer, Vision } from '../core/visibility';
 import { Camera } from '../render/camera';
 import { tileAtPoint, tileCentre, type Point } from '../render/iso';
@@ -93,7 +94,7 @@ export class GameController {
     this.endScreen = new EndScreen(() => void this.host.newGame());
     this.menu = new GameMenu({
       list: listSaves,
-      save: (name) => writeSave(createSave(this.game, name, new Date().toISOString())),
+      save: (name) => writeSave(createSave(this.game, name)),
       load: async (name) => this.host.open(await readSave(name)),
       remove: deleteSave,
       exportSlot: async (name) => {
@@ -102,7 +103,7 @@ export class GameController {
       },
       exportGame: () => {
         const name = this.defaultSaveName();
-        downloadText(fileName(name), saveToJson(createSave(this.game, name, new Date().toISOString())));
+        downloadText(fileName(name), saveToJson(createSave(this.game, name)));
       },
       exportScenario: () => downloadText(fileName(start.scenario.name), scenarioToJson(start.scenario)),
       importText: async (text) => {
@@ -223,11 +224,20 @@ export class GameController {
   /** Overwrite the autosave slot with the game as it stands. */
   private async autosave(): Promise<void> {
     try {
-      await writeSave(createSave(this.game, AUTOSAVE, new Date().toISOString()));
+      await writeSave(createSave(this.game, AUTOSAVE));
     } catch (e) {
       console.warn('Autosave failed:', e);
       this.topBar.message('The game could not be autosaved.');
     }
+  }
+
+  /**
+   * The game as the human knows it (see Vision.knownState). Every preview and check
+   * shown to them reads this, so none gives away hidden units; the reducer still
+   * decides each action against the true state.
+   */
+  private get known(): GameState {
+    return this.vision.knownState();
   }
 
   // ---- selection ----
@@ -268,7 +278,7 @@ export class GameController {
           u.movesLeft > 0 &&
           !u.fortified &&
           !u.orders &&
-          typeOf(this.state, u).domain !== 'air',
+          !isAircraft(typeOf(this.state, u)),
       )
       .sort((a, b) => a.id - b.id);
     if (!waiting.length) {
@@ -297,7 +307,7 @@ export class GameController {
       this.selectUnit(unit.id);
       return;
     }
-    if (typeOf(this.state, unit).domain === 'air') {
+    if (isAircraft(typeOf(this.state, unit))) {
       if (this.dispatch(this.airOrder(unit, target)) && this.state.units[unit.id]) this.selectUnit(unit.id);
       return;
     }
@@ -305,7 +315,7 @@ export class GameController {
     const strike = this.strikeAt(unit, target);
     let action: Action;
     if (strike) action = { type: strike, unitId: unit.id, target };
-    else if (adjacent && unit.movesLeft > 0 && !cannotEnter(this.state, unit, target))
+    else if (adjacent && unit.movesLeft > 0 && !cannotEnter(this.known, unit, target))
       action = { type: 'move', unitId: unit.id, to: target };
     else action = { type: 'setOrders', unitId: unit.id, orders: { kind: 'goto', target } };
     if (this.dispatch(action) && this.state.units[unit.id]) this.selectUnit(unit.id);
@@ -319,7 +329,7 @@ export class GameController {
   private strikeAt(unit: Unit, target: Coord): 'attack' | 'bombard' | null {
     if (!this.enemyVisibleAt(target)) return null;
     const adjacent = isAdjacent(this.state.map, unit.pos, target);
-    if (adjacent && !cannotAttack(this.state, unit, target)) return 'attack';
+    if (adjacent && !cannotAttack(this.known, unit, target)) return 'attack';
     const def = typeOf(this.state, unit);
     if (hasBombard(def) && distance(this.state.map, unit.pos, target) <= def.bombardRange) return 'bombard';
     return adjacent ? 'attack' : null;
@@ -339,9 +349,9 @@ export class GameController {
 
   /** A friendly city, or a carrier of the unit's owner, on a tile. */
   private baseAt(unit: Unit, c: Coord): AirBase | null {
-    const city = cityAt(this.state, c);
+    const city = cityAt(this.known, c);
     if (city && city.owner === unit.owner) return { kind: 'city', id: city.id };
-    const carrier = unitsAt(this.state, c).find(
+    const carrier = unitsAt(this.known, c).find(
       (u) => u.owner === unit.owner && typeOf(this.state, u).cargo?.domain === 'air',
     );
     return carrier ? { kind: 'carrier', id: carrier.id } : null;
@@ -441,15 +451,11 @@ export class GameController {
 
   /** Apply one AI action, then show and log whatever of it the human can see. */
   private async playAction(action: Action, events: GameEvent[]): Promise<void> {
-    const before = this.state;
-    const result = applyAction(before, action);
+    const { before, result } = this.commit(action, events);
     if (!result.ok) {
       console.warn('The AI chose an action the rules refused:', action, result.reason);
       return;
     }
-    events.push(...result.events);
-    this.actions.push(action);
-    this.state = result.state;
     const seenBefore = this.vision;
     const seenAfter = new Vision(this.state, seenBefore.player);
     const canSee = (c: Coord) => seenBefore.at(c) === 'visible' || seenAfter.at(c) === 'visible';
@@ -473,18 +479,31 @@ export class GameController {
   /** Apply an action for the human, reporting why not if it is refused. Events are appended to `events`. */
   dispatch(action: Action, events: GameEvent[] = []): boolean {
     if (this.aiPlaying) return false;
-    const result = applyAction(this.state, action);
+    const { before, result } = this.commit(action, events);
     if (!result.ok) {
       this.topBar.message(result.reason);
       return false;
     }
-    events.push(...result.events);
-    this.combatLog.add(describeEvents(this.state, result.events));
-    this.actions.push(action);
-    this.state = result.state;
+    this.combatLog.add(describeEvents(before, result.events));
     if (this.unitId !== null && !this.state.units[this.unitId]) this.unitId = null;
     this.refresh();
     return true;
+  }
+
+  /**
+   * Apply an action, the human's or the AI's, through the reducer. If the rules accept
+   * it, its state becomes current, it joins the action log (ADR-0004) and its events
+   * are appended to `events`. Returns the result and the state it was applied to.
+   */
+  private commit(action: Action, events: GameEvent[]): { before: GameState; result: ApplyResult } {
+    const before = this.state;
+    const result = applyAction(before, action);
+    if (result.ok) {
+      events.push(...result.events);
+      this.actions.push(action);
+      this.state = result.state;
+    }
+    return { before, result };
   }
 
   // ---- view ----
@@ -581,17 +600,16 @@ export class GameController {
     const own = unit && unit.owner === currentPlayer(this.state).id;
     if (this.dropping && (!own || cannotDrop(this.state, unit))) this.dropping = false;
     if (!own) this.view.showRange([]);
-    else if (this.dropping) this.view.showRange(paradropRange(this.state, unit), 'drop');
-    else if (typeOf(this.state, unit).domain === 'air')
-      this.view.showRange(missionRange(this.state, unit), 'air');
-    else this.view.showRange(unit.movesLeft > 0 ? bombardRange(this.state, unit) : []);
+    else if (this.dropping) this.view.showRange(paradropRange(this.known, unit), 'drop');
+    else if (isAircraft(typeOf(this.state, unit))) this.view.showRange(missionRange(this.known, unit), 'air');
+    else this.view.showRange(unit.movesLeft > 0 ? bombardRange(this.known, unit) : []);
   }
 
   /** Hovering a tile with an aircraft selected, or while choosing a drop: what would happen. */
   private previewSortie(unit: Unit, h: { tile: Coord; screen: Point }): void {
     this.view.showPath(unit.pos, null, null);
     if (this.dropping) {
-      this.showTip(cannotParadrop(this.state, unit, h.tile) ?? 'Paradrop here', h.screen);
+      this.showTip(cannotParadrop(this.known, unit, h.tile) ?? 'Paradrop here', h.screen);
       return;
     }
     const action = this.airOrder(unit, h.tile);
@@ -599,12 +617,12 @@ export class GameController {
       const to = action.to;
       const name =
         to.kind === 'city'
-          ? this.state.cities[to.id]!.name
-          : `the ${typeOf(this.state, this.state.units[to.id]!).name}`;
-      this.showTip(cannotRebase(this.state, unit, to) ?? `Rebase to ${name}`, h.screen);
+          ? this.known.cities[to.id]!.name
+          : `the ${typeOf(this.state, this.known.units[to.id]!).name}`;
+      this.showTip(cannotRebase(this.known, unit, to) ?? `Rebase to ${name}`, h.screen);
     } else if (action.type === 'airMission' && action.mission === 'bomb') {
       this.pathTip.hidden = true;
-      const preview = previewMission(this.state, unit, h.tile);
+      const preview = previewMission(this.known, unit, h.tile);
       if (typeof preview === 'string') this.oddsTip.showReason(preview, h.screen);
       else
         this.oddsTip.showBombard(
@@ -615,7 +633,7 @@ export class GameController {
           'A round trip: fighters may intercept.',
         );
     } else {
-      const why = cannotFlyMission(this.state, unit, 'recon', h.tile);
+      const why = cannotFlyMission(this.known, unit, 'recon', h.tile);
       const radius = this.state.ruleset.air.reconRadius;
       this.showTip(why ?? `Recon: shows ${radius} tiles around until the turn ends`, h.screen);
     }
@@ -632,7 +650,7 @@ export class GameController {
     const unit = this.selectedUnit;
     const h = this.hovered;
     const sortie = unit && h && unit.owner === currentPlayer(this.state).id && !coordsEqual(unit.pos, h.tile);
-    if (sortie && (this.dropping || typeOf(this.state, unit).domain === 'air')) {
+    if (sortie && (this.dropping || isAircraft(typeOf(this.state, unit)))) {
       this.oddsTip.hide();
       this.previewSortie(unit, h);
       return;
@@ -651,14 +669,14 @@ export class GameController {
       this.pathTip.hidden = true;
       const preview =
         strike === 'attack'
-          ? previewAttack(this.state, unit, h.tile)
-          : previewBombard(this.state, unit, h.tile);
+          ? previewAttack(this.known, unit, h.tile)
+          : previewBombard(this.known, unit, h.tile);
       if (typeof preview === 'string') this.oddsTip.showReason(preview, h.screen);
       else if ('odds' in preview) this.oddsTip.show(this.state, unit, preview, h.screen);
       else this.oddsTip.showBombard(this.state, unit, preview, h.screen);
       return;
     }
-    const path = findPath(this.state, unit, h.tile);
+    const path = findPath(this.known, unit, h.tile);
     this.view.showPath(unit.pos, path, h.tile);
     const turns = path?.at(-1)?.turn;
     this.showTip(

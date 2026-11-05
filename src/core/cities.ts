@@ -1,6 +1,6 @@
 /** City rules: production and capture. Functions that take events mutate a draft state. */
 import { neighbours, tileAt } from './grid';
-import { unitType } from './ruleset';
+import { isAircraft, unitType } from './ruleset';
 import type { City, GameEvent, GameState, PlayerId, UnitTypeId } from './types';
 import { newUnit } from './units';
 
@@ -63,7 +63,7 @@ export function runProduction(state: GameState, city: City, events: GameEvent[])
   if (city.queue.length > 1 || !city.repeat) city.queue.shift();
 
   const unit = newUnit(state.ruleset, state.nextId++, next, city.owner, city.pos);
-  if (unitType(state.ruleset, next).domain === 'air') unit.base = { kind: 'city', id: city.id };
+  if (isAircraft(unitType(state.ruleset, next))) unit.base = { kind: 'city', id: city.id };
   state.units[unit.id] = unit;
   events.push({ type: 'unitBuilt', unitId: unit.id, cityId: city.id });
 }

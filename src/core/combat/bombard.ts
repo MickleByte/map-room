@@ -1,11 +1,12 @@
 /**
- * Bombardment: a ranged strike on the best defender of a tile. Each round of the
- * rate of fire hits with bombard strength against modified defence. The target can't
- * fire back, nobody is promoted, and only `lethalBombard` units can kill (ADR-0003).
+ * Bombardment: a ranged strike on the best defender of a tile (see bombardTarget). Each
+ * round of the rate of fire hits with bombard strength against modified defence. The
+ * target can't fire back, nobody is promoted, and only `lethalBombard` units can kill
+ * (ADR-0003).
  */
-import { coordsEqual, distance, normalize, tilesWithin } from '../grid';
-import type { UnitTypeDef } from '../ruleset';
-import { Rng } from '../rng';
+import { coordsEqual, distance, normalize, tileAt, tilesWithin } from '../grid';
+import { isAircraft, type UnitTypeDef } from '../ruleset';
+import { withRng } from '../rng';
 import { typeOf, unitsAt } from '../state';
 import type { Coord, GameEvent, GameState, Unit } from '../types';
 import { destroyUnit } from '../units';
@@ -15,7 +16,7 @@ import { strongest, type Defender } from './resolve';
 
 /** Whether a unit type has a ground or naval bombard. Aircraft bomb on missions instead. */
 export function hasBombard(def: UnitTypeDef): boolean {
-  return def.domain !== 'air' && def.bombardStrength > 0 && def.bombardRange > 0 && def.rateOfFire > 0;
+  return !isAircraft(def) && def.bombardStrength > 0 && def.bombardRange > 0 && def.rateOfFire > 0;
 }
 
 /** Why a unit may not bombard a tile, or null if it may. */
@@ -23,7 +24,7 @@ export function cannotBombard(state: GameState, unit: Unit, target: Coord): stri
   const to = normalize(state.map, target);
   if (!to) return 'That tile is off the map';
   const def = typeOf(state, unit);
-  if (def.domain === 'air') return 'Aircraft bomb on air missions';
+  if (isAircraft(def)) return 'Aircraft bomb on air missions';
   if (!hasBombard(def)) return 'This unit cannot bombard';
   if (unit.carriedBy !== null) return 'Units cannot bombard from aboard a ship';
   if (distance(state.map, unit.pos, to) > def.bombardRange) return 'That tile is out of range';
@@ -33,12 +34,17 @@ export function cannotBombard(state: GameState, unit: Unit, target: Coord): stri
 }
 
 /**
- * The unit a bombard of this tile would hit: the enemy with the highest modified
- * defence, of any domain, not aboard a ship. Null if there is none.
+ * The unit a bombard or bombing run on this tile would hit: the enemy with the highest
+ * modified defence among those of the tile's own domain (land units on land, ships at
+ * sea), as with an attack's best defender. Ships and aircraft in a city never shield its
+ * land units; they are hit only when no enemy land unit is there. Cargo is never hit.
+ * Null if there is no enemy.
  */
 export function bombardTarget(state: GameState, unit: Unit, target: Coord): Defender | null {
-  const enemies = unitsAt(state, target).filter((u) => u.owner !== unit.owner && u.carriedBy === null);
-  return strongest(state, enemies, unit.pos);
+  const exposed = unitsAt(state, target).filter((u) => u.owner !== unit.owner && u.carriedBy === null);
+  const domain = state.ruleset.terrain[tileAt(state.map, target).terrain]!.domain;
+  const shield = exposed.filter((u) => typeOf(state, u).domain === domain);
+  return strongest(state, shield.length ? shield : exposed, unit.pos);
 }
 
 /** The tiles a unit's bombard reaches, its own excluded; none if it has no bombard or is aboard a ship. */
@@ -93,25 +99,25 @@ export function resolveBombard(state: GameState, unit: Unit, to: Coord, events: 
 export function fireShots(state: GameState, unit: Unit, victim: Defender, events: GameEvent[]): void {
   const def = typeOf(state, unit);
   const p = roundChance(def.bombardStrength, victim.defence.strength);
-  const rng = new Rng(state.rng);
   const floor = def.lethalBombard ? 0 : 1;
   const target = victim.unit;
   let hits = 0;
   let misses = 0;
   let damage = 0;
-  // A lethal bombard stops once its target is destroyed.
-  for (let i = 0; i < def.rateOfFire && target.hp > 0; i++) {
-    if (!rng.chance(p)) {
-      misses++;
-      continue;
+  withRng(state, (rng) => {
+    // A lethal bombard stops once its target is destroyed.
+    for (let i = 0; i < def.rateOfFire && target.hp > 0; i++) {
+      if (!rng.chance(p)) {
+        misses++;
+        continue;
+      }
+      hits++;
+      if (target.hp > floor) {
+        target.hp--;
+        damage++;
+      }
     }
-    hits++;
-    if (target.hp > floor) {
-      target.hp--;
-      damage++;
-    }
-  }
-  state.rng = rng.state();
+  });
   events.push({
     type: 'bombarded',
     unitId: unit.id,

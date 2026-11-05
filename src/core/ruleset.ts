@@ -113,6 +113,11 @@ export const defaultRuleset: Ruleset = parseRuleset({ ...rulesetJson, unitTypes:
 
 // ---- lookups ----
 
+/** Aircraft fly sorties from a base instead of moving or attacking. */
+export function isAircraft(def: UnitTypeDef): boolean {
+  return def.domain === 'air';
+}
+
 export function unitType(ruleset: Ruleset, id: string): UnitTypeDef {
   const t = ruleset.unitTypes[id];
   if (!t) throw new Error(`Unknown unit type "${id}"`);

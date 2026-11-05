@@ -1,6 +1,26 @@
 /** Which ships can take which units aboard. Transports carry land units, carriers aircraft. */
-import { cargoOf, typeOf, unitsAt } from './state';
-import type { Coord, GameState, Unit } from './types';
+import { coordsEqual } from './grid';
+import { isAircraft } from './ruleset';
+import { cargoOf, cityAt, typeOf, unitsAt } from './state';
+import type { Coord, GameState, Unit, UnitId } from './types';
+
+/** Why a unit may not board a ship in port, or null if it may. At sea, units move onto the ship instead. */
+export function cannotBoard(state: GameState, unit: Unit, carrierId: UnitId): string | null {
+  const ship = state.units[carrierId];
+  if (!ship) return `No unit with id ${carrierId}`;
+  if (!coordsEqual(unit.pos, ship.pos)) return 'The unit and the ship must be on the same tile';
+  if (!cityAt(state, unit.pos)) return 'Units board in a city; at sea, move onto the ship';
+  if (unit.carriedBy !== null) return 'This unit is already aboard a ship';
+  return cannotCarry(state, ship, unit);
+}
+
+/** Put a unit aboard a ship (see cannotBoard); an aircraft makes it its base. Mutates a draft state. */
+export function resolveBoard(state: GameState, unit: Unit, carrierId: UnitId): void {
+  unit.carriedBy = carrierId;
+  unit.fortified = false;
+  unit.orders = null;
+  if (isAircraft(typeOf(state, unit))) unit.base = { kind: 'carrier', id: carrierId };
+}
 
 /** Why a ship could not take a unit aboard, or null if it could. */
 export function cannotCarry(state: GameState, ship: Unit, unit: Unit): string | null {

@@ -5,8 +5,8 @@
 import { z } from 'zod';
 import { inBounds, neighbours, step, tileIndex } from './grid';
 import { seedRng } from './rng';
-import { defaultRuleset, formatIssues, maxHp, type Ruleset, type VeteranLevel } from './ruleset';
-import type { City, Coord, GameMap, GameState, Player, Tile, Unit, UnitId } from './types';
+import { defaultRuleset, formatIssues, isAircraft, maxHp, type Ruleset, type VeteranLevel } from './ruleset';
+import type { City, Coord, GameMap, GameState, Player, PlayerId, Tile, Unit, UnitId } from './types';
 import { newUnit } from './units';
 import { updateMemory } from './visibility';
 
@@ -143,10 +143,10 @@ export function loadScenario(json: unknown, ruleset: Ruleset = defaultRuleset): 
 
   // ---- units ----
   const units: Record<UnitId, Unit> = {};
-  const ownerAt = new Map<number, string>();
+  const ownerAt = new Map<number, PlayerId>();
   const makeUnit = (
     type: string,
-    owner: string,
+    owner: PlayerId,
     pos: Coord,
     vet: VeteranLevel,
     hp: number | undefined,
@@ -185,7 +185,7 @@ export function loadScenario(json: unknown, ruleset: Ruleset = defaultRuleset): 
       if (terrainDomain !== 'sea' && !coastalCity)
         issues.push(`${where}: ship must be at sea or in a coastal city`);
     }
-    if (def.domain === 'air') {
+    if (isAircraft(def)) {
       if (city && city.owner === u.owner) unit.base = { kind: 'city', id: city.id };
       else issues.push(`${where}: aircraft must start in a friendly city or aboard a carrier`);
     }
@@ -204,7 +204,7 @@ export function loadScenario(json: unknown, ruleset: Ruleset = defaultRuleset): 
         if (pDef.domain !== def.cargo!.domain)
           issues.push(`${cWhere}: ${def.name} carries ${def.cargo!.domain} units, not ${pDef.domain}`);
         passenger.carriedBy = unit.id;
-        if (pDef.domain === 'air') passenger.base = { kind: 'carrier', id: unit.id };
+        if (isAircraft(pDef)) passenger.base = { kind: 'carrier', id: unit.id };
         units[passenger.id] = passenger;
       });
     }
